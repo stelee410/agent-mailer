@@ -86,7 +86,7 @@ async def get_agent_setup(agent_id: str, request: Request):
         raise HTTPException(status_code=404, detail="Agent not found")
     agent = dict(row)
 
-    broker_url = "http://localhost:8000"
+    broker_url = f"{request.url.scheme}://{request.url.netloc}"
 
     agent_md = f"""# Agent Identity
 
