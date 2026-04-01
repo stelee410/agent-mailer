@@ -1,93 +1,95 @@
 # Agent Mailer
 
-本地多智能体异步协作网络 — 基于"异步邮件投递"隐喻的 AI Agent 协作中枢。
+A local multi-agent async collaboration network — an AI Agent orchestration hub built on the "async mailbox" metaphor.
+
+[中文文档](README_CN.md)
 
 ![Operator Console](docs/operator-console.png)
 
-## 简介
+## Overview
 
-Agent Mailer 是一套极简、高度可扩展的本地 AI Agent 协作平台。它通过中心化的消息 Broker，让多个 AI 智能体（如需求拆解、代码实现、Code Review）以邮件收发的方式进行异步协作，解决长周期、需要反复迭代的软件自动化开发流程。
+Agent Mailer is a minimal, highly extensible local AI Agent collaboration platform. Through a centralized message Broker, multiple AI agents (e.g. requirement planning, code implementation, code review) collaborate asynchronously via a mailbox-style messaging system, enabling long-running, iterative software automation workflows.
 
-兼容第三方独立 Agent（如 Claude Code、Cursor）的无缝接入。
+Compatible with third-party agents such as Claude Code and Cursor.
 
-## 核心特性
+## Key Features
 
-- **异步邮件协作** — Send / Reply / Forward / Inbox 四大消息原语
-- **多智能体编排** — 支持 Planner、Coder、Reviewer 等角色协同工作
-- **线程化对话** — 基于 Thread 串联多轮迭代，完整保留上下文
-- **身份管理** — Agent 注册、地址分配（`name@local`）、身份验证
-- **Web 管理面板** — Operator Console 实时查看所有 Agent 收发状态
-- **Claude Code 深度集成** — 内置 CLI 命令（send / check-inbox / reply / forward）
-- **零外部依赖** — SQLite 本地存储，开箱即用
+- **Async Mail Collaboration** — Four messaging primitives: Send / Reply / Forward / Inbox
+- **Multi-Agent Orchestration** — Supports roles like Planner, Coder, Reviewer working together
+- **Threaded Conversations** — Thread-based context linking across multiple iterations
+- **Identity Management** — Agent registration, address assignment (`name@local`), identity verification
+- **Web Admin Panel** — Operator Console for real-time monitoring of all agent activity
+- **Deep Claude Code Integration** — Built-in CLI commands (send / check-inbox / reply / forward)
+- **Zero External Dependencies** — SQLite local storage, works out of the box
 
-## 技术栈
+## Tech Stack
 
-| 组件 | 选型 |
-|------|------|
-| 语言 | Python 3.11+ |
-| Web 框架 | FastAPI |
-| 数据库 | SQLite + aiosqlite |
-| 服务器 | uvicorn |
-| 包管理 | uv |
+| Component | Choice |
+|-----------|--------|
+| Language | Python 3.11+ |
+| Web Framework | FastAPI |
+| Database | SQLite + aiosqlite |
+| Server | uvicorn |
+| Package Manager | uv |
 
-## 快速开始
+## Quick Start
 
-### 安装依赖
+### Install Dependencies
 
 ```bash
 uv sync
 ```
 
-### 启动 Broker
+### Start the Broker
 
 ```bash
 ./run.sh
-# 或
+# or
 uv run uvicorn agent_mailer.main:app --port 9800
 ```
 
-Broker 启动后访问 `http://127.0.0.1:9800/admin/ui` 即可打开 Operator Console。
+Once started, visit `http://127.0.0.1:9800/admin/ui` to open the Operator Console.
 
-### 注册 Agent（自动方式）
+### Register an Agent (Automatic)
 
-Broker 内置了 AI Agent 自助注册引导。只需在 AI Agent（如 Claude Code）中发送以下指令：
+The Broker has a built-in self-registration guide for AI Agents. Simply send the following prompt to your AI Agent (e.g. Claude Code):
 
 ```
-请阅读 http://127.0.0.1:9800/setup.md ，按照其中的步骤完成你的注册和工作目录配置。
+Please read http://127.0.0.1:9800/setup.md and follow the steps to complete your registration and working directory setup.
 ```
 
-Agent 会自动完成：
-1. 与你交互确认角色、名称和职责
-2. 调用 `/agents/register` 注册身份
-3. 调用 `/agents/{id}/setup` 获取配置文件
-4. 在当前工作目录生成 `AGENT.md`（身份 + 通信协议）和 `CLAUDE.md`（Claude Code 适配）
-5. 开始查收邮件、参与协作
+The Agent will automatically:
+1. Interact with you to confirm its role, name, and responsibilities
+2. Call `/agents/register` to register its identity
+3. Call `/agents/{id}/setup` to fetch configuration files
+4. Generate `AGENT.md` (identity + communication protocol) and `CLAUDE.md` (Claude Code adapter) in the current working directory
+5. Start checking mail and collaborating
 
-### 注册 Agent（手动方式）
+### Register an Agent (Manual)
 
-也可以通过 curl 手动注册：
+You can also register manually via curl:
 
 ```bash
-# 1. 注册
+# 1. Register
 AGENT_ID=$(curl -s -X POST http://localhost:9800/agents/register \
   -H "Content-Type: application/json" \
   -d '{
     "name": "coder",
     "role": "coder",
-    "description": "负责根据需求编写代码",
-    "system_prompt": "你是一个专业的软件开发者。"
+    "description": "Implements code based on requirements",
+    "system_prompt": "You are a professional software developer."
   }' | jq -r '.id')
 
-# 2. 获取配置并写入工作目录
+# 2. Fetch config and write to working directory
 SETUP=$(curl -s http://localhost:9800/agents/$AGENT_ID/setup)
 echo "$SETUP" | jq -r '.agent_md' > AGENT.md
 echo "$SETUP" | jq -r '.claude_md' > CLAUDE.md
 
-# 3. 在该目录启动 Claude Code 即可自动加载身份
+# 3. Start Claude Code in this directory — it auto-loads the identity
 claude
 ```
 
-### 发送消息
+### Send a Message
 
 ```bash
 curl -X POST http://localhost:9800/messages/send \
@@ -97,44 +99,44 @@ curl -X POST http://localhost:9800/messages/send \
     "from_agent": "planner@local",
     "to_agent": "coder@local",
     "action": "send",
-    "subject": "实现用户登录模块",
-    "body": "请按照以下规格实现..."
+    "subject": "Implement user login module",
+    "body": "Please implement according to the following spec..."
   }'
 ```
 
-## API 概览
+## API Overview
 
-| 端点 | 说明 |
-|------|------|
-| `POST /agents/register` | 注册新 Agent |
-| `GET /agents` | 列出所有 Agent |
-| `GET /agents/{id}/setup` | 获取 Agent 配置文件 |
-| `POST /messages/send` | 发送 / 回复 / 转发消息 |
-| `GET /messages/inbox/{address}` | 查看收件箱 |
-| `GET /messages/thread/{thread_id}` | 查看对话线程 |
-| `PATCH /messages/{id}/read` | 标记消息已读 |
-| `GET /admin/ui` | Web 管理面板 |
-| `GET /docs` | Swagger API 文档 |
+| Endpoint | Description |
+|----------|-------------|
+| `POST /agents/register` | Register a new Agent |
+| `GET /agents` | List all Agents |
+| `GET /agents/{id}/setup` | Get Agent configuration files |
+| `POST /messages/send` | Send / Reply / Forward a message |
+| `GET /messages/inbox/{address}` | View inbox |
+| `GET /messages/thread/{thread_id}` | View conversation thread |
+| `PATCH /messages/{id}/read` | Mark message as read |
+| `GET /admin/ui` | Web admin panel |
+| `GET /docs` | Swagger API docs |
 
-## 典型工作流
+## Typical Workflow
 
 ```
 Human ──send──▶ Planner ──forward──▶ Coder ──forward──▶ Reviewer
                                        ▲                    │
-                                       └────reply (修改)────┘
+                                       └───reply (revise)───┘
 ```
 
-1. Human 将需求发送给 Planner
-2. Planner 拆解需求，转发给 Coder
-3. Coder 完成编码，转发给 Reviewer
-4. Reviewer 审核，通过则完成；否则回复修改意见给 Coder 继续迭代
+1. Human sends requirements to Planner
+2. Planner breaks down requirements and forwards to Coder
+3. Coder implements and forwards to Reviewer
+4. Reviewer approves or sends revision feedback back to Coder for iteration
 
-## 运行测试
+## Running Tests
 
 ```bash
 uv run pytest tests/ -v
 ```
 
-## 许可证
+## License
 
 MIT
