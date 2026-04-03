@@ -114,6 +114,56 @@ async def test_thread_archive_and_summary_filter(client, agents):
     assert len(active2.json()) == 1
 
 
+async def test_threads_summary_archived_and_trashed_mutual_exclusive(client):
+    resp = await client.get("/admin/threads/summary", params={"archived": True, "trashed": True})
+    assert resp.status_code == 400
+
+
+async def test_thread_trash_restore_purge(client, agents):
+    send = await client.post("/messages/send", json={
+        "agent_id": agents["planner"]["id"],
+        "from_agent": agents["planner"]["address"],
+        "to_agent": agents["coder"]["address"],
+        "action": "send",
+        "subject": "Trash me",
+        "body": "body",
+    })
+    tid = send.json()["thread_id"]
+    mid = send.json()["id"]
+
+    st0 = await client.get(f"/admin/threads/{tid}/status")
+    assert st0.json()["trashed"] is False
+
+    tr = await client.post(f"/admin/threads/{tid}/trash")
+    assert tr.status_code == 200
+
+    active = await client.get("/admin/threads/summary")
+    assert len(active.json()) == 0
+    trashed = await client.get("/admin/threads/summary", params={"trashed": True})
+    assert len(trashed.json()) == 1
+
+    st1 = await client.get(f"/admin/threads/{tid}/status")
+    assert st1.json()["trashed"] is True
+
+    thread_msgs = await client.get(f"/messages/thread/{tid}")
+    assert len(thread_msgs.json()) == 1
+
+    rs = await client.post(f"/admin/threads/{tid}/restore")
+    assert rs.status_code == 200
+    assert len((await client.get("/admin/threads/summary")).json()) == 1
+
+    await client.post(f"/admin/threads/{tid}/trash")
+    pu = await client.post(f"/admin/threads/{tid}/purge")
+    assert pu.status_code == 200
+    assert len((await client.get("/admin/threads/summary", params={"trashed": True})).json()) == 0
+
+    gone = await client.get(f"/messages/thread/{tid}")
+    assert gone.json() == []
+
+    nf = await client.patch(f"/messages/{mid}/read")
+    assert nf.status_code == 404
+
+
 async def test_stats_counts(client, agents):
     # planner sends 2 messages to coder
     for i in range(2):
@@ -223,6 +273,126 @@ async def test_admin_inbox_does_not_mark_read(client, agents):
     assert resp.json()[0]["is_read"] is False
 
 
+async def test_inbox_hides_archived_and_trashed_thread_messages(client, agents):
+    send = await client.post("/messages/send", json={
+        "agent_id": agents["planner"]["id"],
+        "from_agent": agents["planner"]["address"],
+        "to_agent": agents["coder"]["address"],
+        "action": "send",
+        "subject": "Hidden when filed",
+        "body": "x",
+    })
+    tid = send.json()["thread_id"]
+
+    async def coder_inbox_all():
+        return await client.get(
+            f"/messages/inbox/{agents['coder']['address']}",
+            params={"agent_id": agents["coder"]["id"], "all": "true"},
+        )
+
+    async def admin_inbox_all():
+        return await client.get(
+            f"/admin/messages/inbox/{agents['coder']['address']}?all=true",
+        )
+
+    assert len((await coder_inbox_all()).json()) == 1
+    assert len((await admin_inbox_all()).json()) == 1
+
+    await client.post(f"/admin/threads/{tid}/archive")
+    assert (await coder_inbox_all()).json() == []
+    assert (await admin_inbox_all()).json() == []
+
+    await client.post(f"/admin/threads/{tid}/unarchive")
+    assert len((await coder_inbox_all()).json()) == 1
+
+    await client.post(f"/admin/threads/{tid}/trash")
+    assert (await coder_inbox_all()).json() == []
+    assert (await admin_inbox_all()).json() == []
+
+    await client.post(f"/admin/threads/{tid}/restore")
+    assert len((await coder_inbox_all()).json()) == 1
+
+
+async def test_trash_single_message_leaf_only(client, agents):
+    send = await client.post("/messages/send", json={
+        "agent_id": agents["planner"]["id"],
+        "from_agent": agents["planner"]["address"],
+        "to_agent": agents["coder"]["address"],
+        "action": "send",
+        "subject": "Leaf only",
+        "body": "x",
+    })
+    mid = send.json()["id"]
+    tid = send.json()["thread_id"]
+
+    r = await client.post(f"/admin/messages/{mid}/trash")
+    assert r.status_code == 200
+
+    inbox = await client.get(
+        f"/messages/inbox/{agents['coder']['address']}",
+        params={"agent_id": agents["coder"]["id"], "all": "true"},
+    )
+    assert inbox.json() == []
+
+    listed = await client.get("/admin/trash/messages")
+    assert len(listed.json()) == 1
+    assert listed.json()[0]["message_id"] == mid
+
+    detail = await client.get(f"/admin/trash/messages/{mid}")
+    assert detail.status_code == 200
+    assert detail.json()["message"]["id"] == mid
+
+    thread_msgs = await client.get(f"/messages/thread/{tid}")
+    assert thread_msgs.json() == []
+
+    await client.post(f"/admin/messages/{mid}/restore")
+    assert len((await client.get(
+        f"/messages/inbox/{agents['coder']['address']}",
+        params={"agent_id": agents["coder"]["id"], "all": "true"},
+    )).json()) == 1
+
+
+async def test_trash_single_message_rejected_when_has_reply(client, agents):
+    send = await client.post("/messages/send", json={
+        "agent_id": agents["planner"]["id"],
+        "from_agent": agents["planner"]["address"],
+        "to_agent": agents["coder"]["address"],
+        "action": "send",
+        "subject": "Parent",
+        "body": "x",
+    })
+    parent_id = send.json()["id"]
+    await client.post("/messages/send", json={
+        "agent_id": agents["coder"]["id"],
+        "from_agent": agents["coder"]["address"],
+        "to_agent": agents["planner"]["address"],
+        "action": "reply",
+        "subject": "Re: Parent",
+        "body": "reply",
+        "parent_id": parent_id,
+    })
+    r = await client.post(f"/admin/messages/{parent_id}/trash")
+    assert r.status_code == 400
+
+
+async def test_purge_single_message(client, agents):
+    send = await client.post("/messages/send", json={
+        "agent_id": agents["planner"]["id"],
+        "from_agent": agents["planner"]["address"],
+        "to_agent": agents["coder"]["address"],
+        "action": "send",
+        "subject": "To purge",
+        "body": "x",
+    })
+    mid = send.json()["id"]
+    await client.post(f"/admin/messages/{mid}/trash")
+    r = await client.post(f"/admin/messages/{mid}/purge")
+    assert r.status_code == 200
+    listed = await client.get("/admin/trash/messages")
+    assert listed.json() == []
+    assert (await client.post(f"/admin/messages/{mid}/restore")).status_code == 404
+
+
 # --- Admin Send ---
 
 async def test_admin_send(client, agents):
@@ -311,3 +481,4 @@ async def test_ui_returns_html(client):
     assert "Agent Mailer" in resp.text
     assert "Operator Console" in resp.text
     assert "Archive" in resp.text
+    assert "Trash" in resp.text

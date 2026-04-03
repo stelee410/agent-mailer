@@ -67,6 +67,16 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .badge { background: var(--badge-bg); color: var(--badge-text); font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 10px; min-width: 18px; text-align: center; }
 .badge.zero { background: var(--muted); opacity: 0.5; }
 
+.trash-split-title {
+  padding: 10px 16px 4px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--muted);
+  border-top: 1px solid #313244;
+}
+.trash-split-title:first-child { border-top: none; padding-top: 6px; }
+
 .nav-buttons { padding: 12px; display: flex; flex-direction: column; gap: 6px; border-top: 1px solid #333; }
 .nav-btn { padding: 10px 16px; background: none; border: none; color: var(--sidebar-text); cursor: pointer; text-align: left; font-size: 14px; border-radius: 6px; transition: background 0.15s; }
 .nav-btn:hover { background: var(--sidebar-hover); }
@@ -145,8 +155,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .compose-form { display: flex; flex-direction: column; gap: 12px; }
 .compose-form label { font-size: 13px; font-weight: 600; }
 .compose-form select,
-.compose-form input,
+.compose-form input:not([type="radio"]):not([type="checkbox"]),
 .compose-form textarea { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit; }
+.compose-form input[type="radio"],
+.compose-form input[type="checkbox"] { width: auto; flex-shrink: 0; margin: 0; accent-color: var(--primary); }
+.compose-form label.compose-radio-row { display: flex; align-items: flex-start; gap: 10px; font-weight: normal; cursor: pointer; margin-bottom: 8px; }
+.compose-form label.compose-radio-row:last-of-type { margin-bottom: 0; }
+.compose-form .compose-forward-hint { font-size: 12px; color: var(--muted); margin: 0 0 10px; line-height: 1.4; }
+.compose-form .compose-forward-scope > label:first-of-type { display: block; }
 .compose-form textarea { min-height: 200px; resize: vertical; }
 .btn { padding: 8px 20px; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.15s; }
 .btn-primary { background: var(--primary); color: #fff; }
@@ -206,6 +222,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
       <button class="nav-btn" id="navCompose" onclick="showCompose()">Inbox/Compose</button>
       <button class="nav-btn" id="navStats" onclick="showStats()">Stats</button>
       <button class="nav-btn" id="navArchive" onclick="showArchive()">Archive</button>
+      <button class="nav-btn" id="navTrash" onclick="showTrash()">Trash</button>
     </div>
   </div>
   <div class="main" id="main">
@@ -223,8 +240,9 @@ function humanSubjectClass(fromAgent) {
 let agents = [];
 let statsData = [];
 let threadsData = [];
+let trashedMessagesData = [];
 let sidebarMode = 'agents'; // 'agents' | 'threads'
-let currentView = null; // ... | {type: 'archive'} | {type: 'thread', threadId, fromAddress, fromThreadSidebar, fromArchive}
+let currentView = null; // ... | {type:'archive'|'trash'|'trashedMessage'} | {type:'thread', ...}
 let expandedMsg = null;
 let pollTimer = null;
 let pollInterval = 5000;
@@ -259,36 +277,96 @@ async function fetchThread(threadId) {
   return api(`/messages/thread/${encodeURIComponent(threadId)}`);
 }
 
-async function fetchThreadsSummary(archived = false) {
-  const q = archived ? '?archived=true' : '';
+async function fetchThreadsSummary(opts = {}) {
+  const { archived = false, trashed = false } = opts;
+  let q = '';
+  if (trashed) q = '?trashed=true';
+  else if (archived) q = '?archived=true';
   threadsData = await api('/admin/threads/summary' + q);
   return threadsData;
 }
 
-function setSidebarArchiveMode(on) {
+async function fetchTrashedMessages() {
+  trashedMessagesData = await api('/admin/trash/messages');
+  return trashedMessagesData;
+}
+
+/** @param {'none'|'archive'|'trash'} mode */
+function setSidebarSpecialMode(mode) {
   const sel = document.getElementById('sidebarModeSelect');
   const lab = document.getElementById('sidebarModeLabel');
   if (!sel || !lab) return;
-  sel.disabled = !!on;
-  lab.textContent = on ? 'Archive' : 'Sidebar';
+  if (mode === 'none') {
+    sel.disabled = false;
+    lab.textContent = 'Sidebar';
+  } else {
+    sel.disabled = true;
+    lab.textContent = mode === 'archive' ? 'Archive' : 'Trash';
+  }
 }
 
 // --- Sidebar ---
 async function refreshSidebar() {
   const list = document.getElementById('agentList');
+  const inTrashContext =
+    currentView?.type === 'trash' ||
+    currentView?.type === 'trashedMessage' ||
+    (currentView?.type === 'thread' && currentView.fromTrash);
   const inArchiveContext =
     currentView?.type === 'archive' ||
     (currentView?.type === 'thread' && currentView.fromArchive);
 
+  if (inTrashContext) {
+    await fetchThreadsSummary({ trashed: true });
+    await fetchTrashedMessages();
+    const activeTid = currentView?.type === 'thread' ? currentView.threadId : null;
+    const activeMid = currentView?.type === 'trashedMessage' ? currentView.messageId : null;
+    if (threadsData.length === 0 && trashedMessagesData.length === 0) {
+      list.innerHTML = '<div class="empty" style="padding:20px 16px;font-size:12px">Trash is empty.</div>';
+      return;
+    }
+    const threadsBlock = threadsData.length === 0
+      ? '<div class="empty" style="padding:8px 16px 12px;font-size:12px">No threads in trash.</div>'
+      : threadsData.map(t => `
+    <div class="agent-item thread-sidebar-item ${t.thread_id === activeTid ? 'active' : ''}"
+         data-thread-id="${t.thread_id}"
+         onclick="showThreadFromSidebar(this.dataset.threadId, 'trash')">
+      <div class="agent-info">
+        <div class="agent-name">${esc(t.preview_subject) || '(no subject)'}</div>
+        <div class="agent-role">${esc(t.thread_id.substring(0, 8))}&hellip; &middot; ${t.message_count} msg</div>
+      </div>
+      <span class="badge ${t.unread_count === 0 ? 'zero' : ''}">${t.unread_count}</span>
+    </div>
+  `).join('');
+    const msgsBlock = trashedMessagesData.length === 0
+      ? '<div class="empty" style="padding:8px 16px 12px;font-size:12px">No individual messages in trash.</div>'
+      : trashedMessagesData.map(tm => `
+    <div class="agent-item thread-sidebar-item trash-msg-item ${tm.message_id === activeMid ? 'active' : ''}"
+         data-message-id="${tm.message_id}"
+         onclick="showTrashedMessageFromTrash(this.dataset.messageId)">
+      <div class="agent-info">
+        <div class="agent-name">${esc(tm.subject) || '(no subject)'}</div>
+        <div class="agent-role">${esc(tm.from_agent)} &middot; ${esc(tm.thread_id.substring(0, 8))}&hellip;</div>
+      </div>
+    </div>
+  `).join('');
+    list.innerHTML =
+      '<div class="trash-split-title">Threads deleted</div>' +
+      threadsBlock +
+      '<div class="trash-split-title">Messages deleted</div>' +
+      msgsBlock;
+    return;
+  }
+
   if (inArchiveContext) {
-    await fetchThreadsSummary(true);
+    await fetchThreadsSummary({ archived: true });
     const activeTid = currentView?.type === 'thread' ? currentView.threadId : null;
     list.innerHTML = threadsData.length === 0
       ? '<div class="empty" style="padding:20px 16px;font-size:12px">No archived threads.</div>'
       : threadsData.map(t => `
     <div class="agent-item thread-sidebar-item ${t.thread_id === activeTid ? 'active' : ''}"
          data-thread-id="${t.thread_id}"
-         onclick="showThreadFromSidebar(this.dataset.threadId, true)">
+         onclick="showThreadFromSidebar(this.dataset.threadId, 'archive')">
       <div class="agent-info">
         <div class="agent-name">${esc(t.preview_subject) || '(no subject)'}</div>
         <div class="agent-role">${esc(t.thread_id.substring(0, 8))}&hellip; &middot; ${t.message_count} msg</div>
@@ -300,14 +378,14 @@ async function refreshSidebar() {
   }
 
   if (sidebarMode === 'threads') {
-    await fetchThreadsSummary(false);
+    await fetchThreadsSummary({});
     const activeTid = currentView?.type === 'thread' ? currentView.threadId : null;
     list.innerHTML = threadsData.length === 0
       ? '<div class="empty" style="padding:20px 16px;font-size:12px">No threads yet.</div>'
       : threadsData.map(t => `
     <div class="agent-item thread-sidebar-item ${t.thread_id === activeTid ? 'active' : ''}"
          data-thread-id="${t.thread_id}"
-         onclick="showThreadFromSidebar(this.dataset.threadId, false)">
+         onclick="showThreadFromSidebar(this.dataset.threadId, null)">
       <div class="agent-info">
         <div class="agent-name">${esc(t.preview_subject) || '(no subject)'}</div>
         <div class="agent-role">${esc(t.thread_id.substring(0, 8))}&hellip; &middot; ${t.message_count} msg</div>
@@ -342,16 +420,125 @@ function clearNav() {
 async function showArchive() {
   clearNav();
   document.getElementById('navArchive').classList.add('active');
-  setSidebarArchiveMode(true);
+  setSidebarSpecialMode('archive');
   currentView = { type: 'archive' };
   document.getElementById('main').innerHTML =
     '<div class="empty">Select an archived thread from the sidebar.</div>';
   await refreshSidebar();
 }
 
+async function showTrash() {
+  clearNav();
+  document.getElementById('navTrash').classList.add('active');
+  setSidebarSpecialMode('trash');
+  currentView = { type: 'trash' };
+  document.getElementById('main').innerHTML =
+    '<div class="empty">Select a deleted thread or message from the sidebar.</div>';
+  await refreshSidebar();
+}
+
+async function showTrashedMessageFromTrash(messageId) {
+  clearNav();
+  document.getElementById('navTrash').classList.add('active');
+  setSidebarSpecialMode('trash');
+  currentView = { type: 'trashedMessage', messageId };
+  await refreshSidebar();
+  await renderTrashedMessageView();
+}
+
+async function renderTrashedMessageView() {
+  if (currentView?.type !== 'trashedMessage') return;
+  const mid = currentView.messageId;
+  const main = document.getElementById('main');
+  let data;
+  try {
+    data = await api(`/admin/trash/messages/${encodeURIComponent(mid)}`);
+  } catch (e) {
+    main.innerHTML = `
+      <div class="card">
+        <p class="empty">This message is no longer in trash.</p>
+        <button type="button" class="back-btn" id="tmGoneBack">\u2190 Back to Trash</button>
+      </div>`;
+    document.getElementById('tmGoneBack').onclick = () => {
+      currentView = { type: 'trash' };
+      main.innerHTML =
+        '<div class="empty">Select a deleted thread or message from the sidebar.</div>';
+      void refreshSidebar();
+    };
+    return;
+  }
+  const m = data.message;
+  main.innerHTML = `
+    <button type="button" class="back-btn" id="tmBackBtn">\u2190 Back to Trash</button>
+    <div class="card">
+      <h2>Message in trash</h2>
+      <p class="meta">Trashed at: ${esc(fmtTime(data.trashed_at))}</p>
+      <div class="thread-msg">
+        <div class="thread-meta">
+          <strong>${esc(m.from_agent)}</strong> &rarr; ${esc(m.to_agent)}
+          <span class="msg-action-tag ${m.action}" style="margin-left:6px">${m.action}</span>
+          <span style="margin-left:8px;color:var(--muted)">${esc(fmtTime(m.created_at))}</span>
+        </div>
+        ${m.subject ? `<div class="thread-subject-line${humanSubjectClass(m.from_agent)}">${esc(m.subject)}</div>` : ''}
+        <div class="thread-body markdown-body" data-md-html="${mdDataAttr(m.body_html)}"></div>
+      </div>
+      <div class="thread-actions" style="margin-top:12px">
+        <button type="button" class="btn btn-secondary" id="tmRestoreBtn">Restore</button>
+        <button type="button" class="btn btn-secondary" id="tmPurgeBtn" style="background:var(--danger)">Delete permanently</button>
+      </div>
+    </div>`;
+  hydrateMarkdownBodies(main);
+  document.getElementById('tmBackBtn').onclick = () => {
+    currentView = { type: 'trash' };
+    main.innerHTML =
+      '<div class="empty">Select a deleted thread or message from the sidebar.</div>';
+    void refreshSidebar();
+  };
+  document.getElementById('tmRestoreBtn').onclick = async () => {
+    try {
+      await api(`/admin/messages/${encodeURIComponent(mid)}/restore`, { method: 'POST' });
+      currentView = { type: 'trash' };
+      main.innerHTML =
+        '<div class="empty">Select a deleted thread or message from the sidebar.</div>';
+      await refreshSidebar();
+    } catch (e) {
+      alert(e.message);
+    }
+  };
+  document.getElementById('tmPurgeBtn').onclick = async () => {
+    if (!window.confirm('Permanently delete this message? This cannot be undone.')) return;
+    try {
+      await api(`/admin/messages/${encodeURIComponent(mid)}/purge`, { method: 'POST' });
+      currentView = { type: 'trash' };
+      main.innerHTML =
+        '<div class="empty">Select a deleted thread or message from the sidebar.</div>';
+      await refreshSidebar();
+    } catch (e) {
+      alert(e.message);
+    }
+  };
+}
+
+async function trashSingleMessage(messageId, opts = {}) {
+  try {
+    await api(`/admin/messages/${encodeURIComponent(messageId)}/trash`, { method: 'POST' });
+    if (opts.fromInbox && expandedMsg === messageId) expandedMsg = null;
+    if (currentView?.type === 'trashedMessage') {
+      currentView = { type: 'trash' };
+      document.getElementById('main').innerHTML =
+        '<div class="empty">Select a deleted thread or message from the sidebar.</div>';
+    }
+    await refreshSidebar();
+    if (opts.fromThread) await renderThreadView();
+    else if (currentView?.type === 'inbox') await renderInbox();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
 async function showInbox(address) {
   clearNav();
-  setSidebarArchiveMode(false);
+  setSidebarSpecialMode('none');
   currentView = { type: 'inbox', address };
   await refreshSidebar();
   await renderInbox();
@@ -411,13 +598,18 @@ function renderMsgDetail(m) {
       <div class="meta">Action: ${m.action} | Thread: ${m.thread_id.substring(0, 8)}...</div>
       ${m.parent_id ? `<div class="meta">Reply to: ${m.parent_id.substring(0, 8)}...</div>` : ''}
       <div class="msg-body markdown-body" data-md-html="${mdDataAttr(m.body_html)}"></div>
-      <span class="thread-link" data-thread-id="${m.thread_id}" onclick="event.stopPropagation(); showThreadFromInboxLink(this.dataset.threadId)">View full thread</span>
-      <span style="margin-left:12px" class="thread-link" onclick="replyToMsg('${m.id}', event)">Reply</span>
+      <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+        <span class="thread-link" data-thread-id="${m.thread_id}" onclick="event.stopPropagation(); showThreadFromInboxLink(this.dataset.threadId)">View full thread</span>
+        <span class="thread-link" onclick="replyToMsg('${m.id}', event)">Reply</span>
+        <span class="thread-link" onclick="forwardToMsg('${m.id}', event)">Forward</span>
+        <button type="button" class="btn btn-secondary msg-trash-action" style="font-size:12px;padding:4px 10px"
+          onclick="event.stopPropagation(); trashSingleMessage('${m.id}', { fromInbox: true })">Move message to trash</button>
+      </div>
     </div>`;
 }
 
 async function toggleMsg(msgId, ev) {
-  if (ev.target.closest && ev.target.closest('.thread-link')) return;
+  if (ev.target.closest && (ev.target.closest('.thread-link') || ev.target.closest('.msg-trash-action'))) return;
   const expanding = expandedMsg !== msgId;
   expandedMsg = expanding ? msgId : null;
   if (expanding) {
@@ -435,20 +627,24 @@ async function showThreadFromInboxLink(threadId) {
   await showThread(threadId, addr, null, false);
 }
 
-async function showThreadFromSidebar(threadId, fromArchive = false) {
+async function showThreadFromSidebar(threadId, context = null) {
   clearNav();
-  if (fromArchive) {
+  if (context === 'archive') {
     document.getElementById('navArchive').classList.add('active');
-    setSidebarArchiveMode(true);
+    setSidebarSpecialMode('archive');
+  } else if (context === 'trash') {
+    document.getElementById('navTrash').classList.add('active');
+    setSidebarSpecialMode('trash');
   } else {
-    setSidebarArchiveMode(false);
+    setSidebarSpecialMode('none');
   }
   currentView = {
     type: 'thread',
     threadId,
     fromAddress: '',
     fromThreadSidebar: true,
-    fromArchive: !!fromArchive,
+    fromArchive: context === 'archive',
+    fromTrash: context === 'trash',
   };
   await refreshSidebar();
   await renderThreadView();
@@ -456,43 +652,64 @@ async function showThreadFromSidebar(threadId, fromArchive = false) {
 
 async function showThread(threadId, fromAddress, ev, fromThreadSidebar = false) {
   if (ev) ev.stopPropagation();
-  setSidebarArchiveMode(false);
+  setSidebarSpecialMode('none');
   currentView = {
     type: 'thread',
     threadId,
     fromAddress: fromAddress || '',
     fromThreadSidebar,
     fromArchive: false,
+    fromTrash: false,
   };
   await renderThreadView();
 }
 
+function buildThreadActionButtons(st) {
+  const parts = [];
+  if (st.trashed) {
+    parts.push('<button type="button" class="btn btn-secondary" id="restoreThreadBtn">Restore</button>');
+    parts.push(
+      '<button type="button" class="btn btn-secondary" id="purgeThreadBtn" style="background:var(--danger)">Delete permanently</button>',
+    );
+    return parts.join('');
+  }
+  if (st.archived) {
+    parts.push('<button type="button" class="btn btn-secondary" id="unarchiveThreadBtn">Unarchive</button>');
+  } else {
+    parts.push('<button type="button" class="btn btn-secondary" id="archiveThreadBtn">Archive thread</button>');
+  }
+  parts.push(
+    '<button type="button" class="btn btn-secondary" id="trashThreadBtn" style="background:#64748b">Move to trash</button>',
+  );
+  return parts.join('');
+}
+
 async function renderThreadView() {
   if (currentView?.type !== 'thread') return;
-  const { threadId, fromAddress, fromThreadSidebar, fromArchive } = currentView;
+  const { threadId, fromAddress, fromThreadSidebar, fromArchive, fromTrash } = currentView;
   const msgs = await fetchThread(threadId);
-  let archStatus = { archived: false };
+  msgs.forEach(m => { msgCache[m.id] = m; });
+  let st = { archived: false, trashed: false };
   try {
-    archStatus = await api(`/admin/threads/${encodeURIComponent(threadId)}/archive`);
+    st = await api(`/admin/threads/${encodeURIComponent(threadId)}/status`);
   } catch (e) { /* ignore */ }
-  const isArchived = !!archStatus.archived;
   const main = document.getElementById('main');
   let backLabel = '\u2190 Back to inbox';
   if (fromThreadSidebar) {
-    backLabel = fromArchive ? '\u2190 Back to Archive' : '\u2190 Back to thread list';
+    if (fromTrash) backLabel = '\u2190 Back to Trash';
+    else if (fromArchive) backLabel = '\u2190 Back to Archive';
+    else backLabel = '\u2190 Back to thread list';
   }
   const firstSubject = msgs.length > 0 && String(msgs[0].subject || '').trim()
     ? String(msgs[0].subject).trim()
     : '';
   const threadTitle = firstSubject || '(no subject)';
-  const archiveActions = isArchived
-    ? '<button type="button" class="btn btn-secondary" id="unarchiveThreadBtn">Unarchive</button>'
-    : '<button type="button" class="btn btn-secondary" id="archiveThreadBtn">Archive thread</button>';
+  const actionHtml = buildThreadActionButtons(st);
   main.innerHTML = `
     <button type="button" class="back-btn" id="threadBackBtn">${backLabel}</button>
     <div class="card">
       <h2>${esc(threadTitle)}</h2>
-      <div class="thread-actions">${archiveActions}</div>
+      <div class="thread-actions">${actionHtml}</div>
       ${msgs.map(m => `
         <div class="thread-msg">
           <div class="thread-meta">
@@ -502,6 +719,11 @@ async function renderThreadView() {
           </div>
           ${m.subject ? `<div class="thread-subject-line${humanSubjectClass(m.from_agent)}">${esc(m.subject)}</div>` : ''}
           <div class="thread-body markdown-body" data-md-html="${mdDataAttr(m.body_html)}"></div>
+          ${!st.trashed ? `<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+            <span class="thread-link" onclick="replyToMsg('${m.id}', event)">Reply</span>
+            <span class="thread-link" onclick="forwardToMsg('${m.id}', event)">Forward</span>
+            <button type="button" class="btn btn-secondary" style="font-size:12px;padding:4px 10px" onclick="trashSingleMessage('${m.id}', { fromThread: true })">Move message to trash</button>
+          </div>` : ''}
         </div>
       `).join('')}
     </div>`;
@@ -542,9 +764,58 @@ async function renderThreadView() {
       }
     };
   }
+  const trashBtn = document.getElementById('trashThreadBtn');
+  if (trashBtn) {
+    trashBtn.onclick = async () => {
+      try {
+        await api(`/admin/threads/${encodeURIComponent(threadId)}/trash`, { method: 'POST' });
+        if (currentView.fromThreadSidebar) threadBackToSidebarList();
+        else await showInbox(currentView.fromAddress);
+        await refreshSidebar();
+      } catch (e) {
+        trashBtn.insertAdjacentText('afterend', ' ' + e.message);
+      }
+    };
+  }
+  const restoreBtn = document.getElementById('restoreThreadBtn');
+  if (restoreBtn) {
+    restoreBtn.onclick = async () => {
+      try {
+        await api(`/admin/threads/${encodeURIComponent(threadId)}/restore`, { method: 'POST' });
+        currentView = { type: 'trash' };
+        document.getElementById('main').innerHTML =
+          '<div class="empty">Select a deleted thread or message from the sidebar.</div>';
+        await refreshSidebar();
+      } catch (e) {
+        restoreBtn.insertAdjacentText('afterend', ' ' + e.message);
+      }
+    };
+  }
+  const purgeBtn = document.getElementById('purgeThreadBtn');
+  if (purgeBtn) {
+    purgeBtn.onclick = async () => {
+      if (!window.confirm('Permanently delete this thread and all messages? This cannot be undone.')) return;
+      try {
+        await api(`/admin/threads/${encodeURIComponent(threadId)}/purge`, { method: 'POST' });
+        currentView = { type: 'trash' };
+        document.getElementById('main').innerHTML =
+          '<div class="empty">Select a deleted thread or message from the sidebar.</div>';
+        await refreshSidebar();
+      } catch (e) {
+        purgeBtn.insertAdjacentText('afterend', ' ' + e.message);
+      }
+    };
+  }
 }
 
 function threadBackToSidebarList() {
+  if (currentView?.fromTrash) {
+    currentView = { type: 'trash' };
+    document.getElementById('main').innerHTML =
+      '<div class="empty">Select a deleted thread or message from the sidebar.</div>';
+    void refreshSidebar();
+    return;
+  }
   if (currentView?.fromArchive) {
     currentView = { type: 'archive' };
     document.getElementById('main').innerHTML =
@@ -558,18 +829,42 @@ function threadBackToSidebarList() {
   void refreshSidebar();
 }
 
-async function showCompose(prefillTo, prefillSubject, prefillParentId, originalBody, originalBodyHtml) {
+async function showCompose(prefillTo, prefillSubject, prefillParentId, originalBody, originalBodyHtml, options) {
+  options = options || {};
+  const mode = options.mode != null ? options.mode : (prefillParentId ? 'reply' : 'send');
   clearNav();
-  setSidebarArchiveMode(false);
+  setSidebarSpecialMode('none');
   document.getElementById('navCompose').classList.add('active');
   currentView = { type: 'compose' };
 
   if (agents.length === 0) await fetchAgents();
 
+  let title = 'Compose Message';
+  if (mode === 'reply') title = 'Reply';
+  else if (mode === 'forward') title = 'Forward';
+
+  const forwardScopeBlock = mode === 'forward' ? `
+        <div class="compose-forward-scope">
+          <label>Forwarded content</label>
+          <p class="compose-forward-hint">Shown after your note. Pick scope for the new recipient.</p>
+          <label class="compose-radio-row">
+            <input type="radio" name="forwardScope" value="message" checked>
+            <span>This message only</span>
+          </label>
+          <label class="compose-radio-row">
+            <input type="radio" name="forwardScope" value="thread">
+            <span>Full thread (chronological)</span>
+          </label>
+        </div>` : '';
+
+  const bodyPlaceholder = mode === 'forward'
+    ? 'Optional note (appears above forwarded content)...'
+    : 'Write your message...';
+
   const main = document.getElementById('main');
   main.innerHTML = `
     <div class="card">
-      <h2>${prefillParentId ? 'Reply' : 'Compose Message'}</h2>
+      <h2>${title}</h2>
       <div class="compose-form">
         <div>
           <label>To</label>
@@ -581,20 +876,22 @@ async function showCompose(prefillTo, prefillSubject, prefillParentId, originalB
           <label>Subject</label>
           <input id="composeSubject" type="text" placeholder="Subject..." value="${esc(prefillSubject || '')}">
         </div>
+        ${forwardScopeBlock}
         <div>
           <label>Body</label>
-          <textarea id="composeBody" placeholder="Write your message..."></textarea>
+          <textarea id="composeBody" placeholder="${esc(bodyPlaceholder)}"></textarea>
         </div>
         ${originalBody ? (originalBodyHtml ? `
         <div>
-          <label style="color:var(--muted)">Original Message</label>
+          <label style="color:var(--muted)">Reference (source message)</label>
           <div class="markdown-body compose-original-md" data-md-html="${mdDataAttr(originalBodyHtml)}"></div>
         </div>` : `
         <div>
-          <label style="color:var(--muted)">Original Message</label>
+          <label style="color:var(--muted)">Reference (source message)</label>
           <div class="compose-original-md" style="white-space:pre-wrap;color:var(--muted)">${esc(originalBody)}</div>
         </div>`) : ''}
         <input type="hidden" id="composeParentId" value="${prefillParentId || ''}">
+        <input type="hidden" id="composeMode" value="${esc(mode)}">
         <div style="display:flex;gap:12px;align-items:center">
           <button class="btn btn-primary" id="sendBtn" onclick="doSend()">Send</button>
           <div id="composeStatus"></div>
@@ -612,20 +909,39 @@ function replyToMsg(msgId, ev) {
   showCompose(m.from_agent, reSubject, m.id, m.body, m.body_html);
 }
 
+function forwardToMsg(msgId, ev) {
+  if (ev) ev.stopPropagation();
+  const m = msgCache[msgId];
+  if (!m) return;
+  const subj = (m.subject || '').trim();
+  const fwdSubject = subj && /^fwd:/i.test(subj) ? subj : `Fwd: ${subj || '(no subject)'}`;
+  showCompose('', fwdSubject, m.id, m.body, m.body_html, { mode: 'forward' });
+}
+
 async function doSend() {
   const btn = document.getElementById('sendBtn');
   const status = document.getElementById('composeStatus');
   btn.disabled = true;
   status.textContent = '';
 
+  const mode = (document.getElementById('composeMode') || {}).value || 'send';
+  const parentId = document.getElementById('composeParentId').value;
   const body = {
     to_agent: document.getElementById('composeTo').value,
     subject: document.getElementById('composeSubject').value,
     body: document.getElementById('composeBody').value,
-    action: document.getElementById('composeParentId').value ? 'reply' : 'send',
   };
-  const parentId = document.getElementById('composeParentId').value;
-  if (parentId) body.parent_id = parentId;
+  if (mode === 'forward') {
+    body.action = 'forward';
+    body.parent_id = parentId;
+    const sel = document.querySelector('input[name="forwardScope"]:checked');
+    body.forward_scope = sel ? sel.value : 'message';
+  } else if (mode === 'reply') {
+    body.action = 'reply';
+    body.parent_id = parentId;
+  } else {
+    body.action = 'send';
+  }
 
   try {
     await api('/admin/messages/send', {
@@ -649,7 +965,7 @@ async function doSend() {
 
 async function showStats() {
   clearNav();
-  setSidebarArchiveMode(false);
+  setSidebarSpecialMode('none');
   document.getElementById('navStats').classList.add('active');
   currentView = { type: 'stats' };
   await renderStats();
@@ -702,6 +1018,7 @@ function startPolling() {
     if (currentView?.type === 'inbox') await renderInbox();
     if (currentView?.type === 'stats') await renderStats();
     if (currentView?.type === 'thread') await renderThreadView();
+    if (currentView?.type === 'trashedMessage') await renderTrashedMessageView();
   }, pollInterval);
 }
 
@@ -712,7 +1029,7 @@ function stopPolling() {
 document.getElementById('sidebarModeSelect').addEventListener('change', async (e) => {
   sidebarMode = e.target.value;
   clearNav();
-  setSidebarArchiveMode(false);
+  setSidebarSpecialMode('none');
   currentView = null;
   document.getElementById('main').innerHTML =
     '<div class="empty">Select an agent or thread, or open Inbox/Compose / Stats.</div>';

@@ -1,5 +1,9 @@
+from typing import Literal
+
 import markdown as _md
 from pydantic import BaseModel
+
+ForwardScope = Literal["message", "thread"]
 
 _markdown_extensions = ["fenced_code", "tables", "nl2br", "sane_lists", "codehilite"]
 
@@ -46,6 +50,8 @@ class SendRequest(BaseModel):
     body: str = ""
     attachments: list[str] = []
     parent_id: str | None = None
+    # When action is forward: build body from parent / thread plus optional note in body.
+    forward_scope: ForwardScope | None = None
 
 
 class MessageResponse(BaseModel):
@@ -69,6 +75,7 @@ class AdminSendRequest(BaseModel):
     subject: str = ""
     body: str = ""
     parent_id: str | None = None
+    forward_scope: ForwardScope | None = None
 
 
 class AgentStats(BaseModel):
@@ -91,8 +98,34 @@ class ThreadSummary(BaseModel):
     unread_count: int
     preview_subject: str = ""
     archived_at: str | None = None  # set when listing archived threads
+    trashed_at: str | None = None  # set when listing trash
 
 
 class ThreadArchiveStatus(BaseModel):
     archived: bool
     archived_at: str | None = None
+
+
+class ThreadOperatorStatus(BaseModel):
+    """Archive + trash flags for operator console thread actions."""
+
+    archived: bool
+    trashed: bool
+    archived_at: str | None = None
+    trashed_at: str | None = None
+
+
+class TrashedMessageListItem(BaseModel):
+    message_id: str
+    thread_id: str
+    trashed_at: str
+    from_agent: str
+    to_agent: str
+    action: str
+    subject: str
+    created_at: str
+
+
+class TrashedMessageDetail(BaseModel):
+    trashed_at: str
+    message: MessageResponse

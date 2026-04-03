@@ -37,6 +37,35 @@ CREATE TABLE IF NOT EXISTS archived_threads (
 );
 """
 
+TRASHED_THREADS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS trashed_threads (
+    thread_id TEXT PRIMARY KEY,
+    trashed_at TEXT NOT NULL
+);
+"""
+
+TRASHED_MESSAGES_SCHEMA = """
+CREATE TABLE IF NOT EXISTS trashed_messages (
+    message_id TEXT PRIMARY KEY,
+    trashed_at TEXT NOT NULL
+);
+"""
+
+# Inbox listings (agent + admin) hide messages in archived or trashed threads.
+INBOX_THREAD_VISIBILITY_SQL = (
+    "thread_id NOT IN (SELECT thread_id FROM archived_threads) "
+    "AND thread_id NOT IN (SELECT thread_id FROM trashed_threads)"
+)
+
+# Hide individually trashed messages (operator soft-delete per message).
+MESSAGE_NOT_TRASHED_SQL = "id NOT IN (SELECT message_id FROM trashed_messages)"
+
+# Combined filter for inbox-style queries (no table alias).
+INBOX_VISIBILITY_SQL = f"({INBOX_THREAD_VISIBILITY_SQL}) AND ({MESSAGE_NOT_TRASHED_SQL})"
+
+# Per-message row filter when using alias `m` (thread summaries).
+MESSAGE_ROW_VISIBLE_SQL = f"m.id NOT IN (SELECT message_id FROM trashed_messages)"
+
 
 async def get_db(db_path: str = DB_PATH) -> aiosqlite.Connection:
     db = await aiosqlite.connect(db_path)
@@ -48,4 +77,6 @@ async def get_db(db_path: str = DB_PATH) -> aiosqlite.Connection:
 async def init_db(db: aiosqlite.Connection):
     await db.executescript(SCHEMA)
     await db.executescript(ARCHIVED_THREADS_SCHEMA)
+    await db.executescript(TRASHED_THREADS_SCHEMA)
+    await db.executescript(TRASHED_MESSAGES_SCHEMA)
     await db.commit()

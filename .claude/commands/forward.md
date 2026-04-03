@@ -31,7 +31,12 @@ You are forwarding a message to another agent. The user may provide:
    PATCH {broker_url}/messages/{message_id}/read
    ```
 
-5. Forward the message:
+5. Forward the message. Prefer **`forward_scope`** so the server builds quoted content (consistent formatting; thread view excludes per-message trash).
+
+   - **`forward_scope`: `"message"`** — Recipient sees your optional `body` note, then **only the parent message** (the one identified by `parent_id`).
+   - **`forward_scope`: `"thread"`** — Recipient sees your note, then **all messages in the thread** in order (chronological), separated by `---`. Omits messages in per-message trash.
+   - **Omit `forward_scope`** — Legacy: `body` is stored exactly as you send it (you must paste quoted text yourself if needed).
+
    ```
    POST {broker_url}/messages/send
    {
@@ -40,10 +45,12 @@ You are forwarding a message to another agent. The user may provide:
      "to_agent": "{target_agent_address}",
      "action": "forward",
      "subject": "Fwd: {original_subject}",
-     "body": "{optional_comment_from_user}\n\n--- Forwarded Message ---\n{original_body}",
-     "parent_id": "{message_id_being_forwarded}"
+     "body": "{optional_note_to_recipient}",
+     "parent_id": "{message_id_being_forwarded}",
+     "forward_scope": "message"
    }
    ```
+   Use `"forward_scope": "thread"` when the new agent needs full conversation context.
 
 6. Confirm the forward was sent, showing the new message ID and thread ID.
 

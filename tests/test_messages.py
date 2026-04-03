@@ -123,6 +123,131 @@ async def test_forward_inherits_thread(client, agents):
     assert fwd["to_agent"] == agents["reviewer"]["address"]
 
 
+async def test_forward_scope_message_formats_parent(client, agents):
+    send_resp = await client.post("/messages/send", json={
+        "agent_id": agents["planner"]["id"],
+        "from_agent": agents["planner"]["address"],
+        "to_agent": agents["coder"]["address"],
+        "action": "send",
+        "subject": "Spec",
+        "body": "Build it",
+    })
+    original = send_resp.json()
+
+    fwd_resp = await client.post("/messages/send", json={
+        "agent_id": agents["coder"]["id"],
+        "from_agent": agents["coder"]["address"],
+        "to_agent": agents["reviewer"]["address"],
+        "action": "forward",
+        "subject": "Fwd: Spec",
+        "body": "FYI",
+        "parent_id": original["id"],
+        "forward_scope": "message",
+    })
+    assert fwd_resp.status_code == 200
+    body = fwd_resp.json()["body"]
+    assert "FYI" in body
+    assert "----------" in body
+    assert "Build it" in body
+    assert original["from_agent"] in body
+    assert "Subject: Spec" in body
+
+
+async def test_forward_scope_thread_includes_all_messages(client, agents):
+    a = await client.post("/messages/send", json={
+        "agent_id": agents["planner"]["id"],
+        "from_agent": agents["planner"]["address"],
+        "to_agent": agents["coder"]["address"],
+        "action": "send",
+        "subject": "T",
+        "body": "First",
+    })
+    root = a.json()
+    await client.post("/messages/send", json={
+        "agent_id": agents["coder"]["id"],
+        "from_agent": agents["coder"]["address"],
+        "to_agent": agents["planner"]["address"],
+        "action": "reply",
+        "subject": "Re: T",
+        "body": "Second",
+        "parent_id": root["id"],
+    })
+
+    fwd = await client.post("/messages/send", json={
+        "agent_id": agents["planner"]["id"],
+        "from_agent": agents["planner"]["address"],
+        "to_agent": agents["reviewer"]["address"],
+        "action": "forward",
+        "subject": "Fwd",
+        "body": "",
+        "parent_id": root["id"],
+        "forward_scope": "thread",
+    })
+    assert fwd.status_code == 200
+    text = fwd.json()["body"]
+    assert "First" in text
+    assert "Second" in text
+    assert "\n\n---\n\n" in text
+
+
+async def test_forward_scope_thread_skips_trashed_message(client, agents):
+    root = (await client.post("/messages/send", json={
+        "agent_id": agents["planner"]["id"],
+        "from_agent": agents["planner"]["address"],
+        "to_agent": agents["coder"]["address"],
+        "action": "send",
+        "subject": "T2",
+        "body": "Alpha",
+    })).json()
+    leaf = (await client.post("/messages/send", json={
+        "agent_id": agents["coder"]["id"],
+        "from_agent": agents["coder"]["address"],
+        "to_agent": agents["planner"]["address"],
+        "action": "reply",
+        "subject": "Re: T2",
+        "body": "Beta",
+        "parent_id": root["id"],
+    })).json()
+    await client.post(f"/admin/messages/{leaf['id']}/trash")
+
+    fwd = await client.post("/messages/send", json={
+        "agent_id": agents["planner"]["id"],
+        "from_agent": agents["planner"]["address"],
+        "to_agent": agents["reviewer"]["address"],
+        "action": "forward",
+        "subject": "Fwd",
+        "body": "",
+        "parent_id": root["id"],
+        "forward_scope": "thread",
+    })
+    assert fwd.status_code == 200
+    text = fwd.json()["body"]
+    assert "Alpha" in text
+    assert "Beta" not in text
+
+
+async def test_forward_scope_only_with_forward_action(client, agents):
+    root = (await client.post("/messages/send", json={
+        "agent_id": agents["planner"]["id"],
+        "from_agent": agents["planner"]["address"],
+        "to_agent": agents["coder"]["address"],
+        "action": "send",
+        "subject": "X",
+        "body": "y",
+    })).json()
+    r = await client.post("/messages/send", json={
+        "agent_id": agents["coder"]["id"],
+        "from_agent": agents["coder"]["address"],
+        "to_agent": agents["planner"]["address"],
+        "action": "reply",
+        "subject": "Re: X",
+        "body": "z",
+        "parent_id": root["id"],
+        "forward_scope": "message",
+    })
+    assert r.status_code == 400
+
+
 async def test_reply_requires_parent_id(client, agents):
     resp = await client.post("/messages/send", json={
         "agent_id": agents["coder"]["id"],

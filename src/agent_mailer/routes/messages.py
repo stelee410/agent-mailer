@@ -2,6 +2,8 @@ import json
 import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query, Request
+from agent_mailer.db import INBOX_VISIBILITY_SQL
+from agent_mailer.forward_body import build_forward_body
 from agent_mailer.models import SendRequest, MessageResponse, render_body_html
 
 router = APIRouter()
@@ -58,9 +60,26 @@ async def send_message(req: SendRequest, request: Request):
             raise HTTPException(status_code=404, detail="Parent message not found")
         thread_id = parent["thread_id"]
 
+    body_to_store = req.body
+    if req.forward_scope is not None:
+        if req.action != "forward":
+            raise HTTPException(
+                status_code=400,
+                detail="forward_scope is only allowed when action is forward",
+            )
+        try:
+            body_to_store = await build_forward_body(
+                db,
+                parent_id=req.parent_id,
+                forward_scope=req.forward_scope,
+                user_body=req.body,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+
     now = datetime.now(timezone.utc).isoformat()
     attachments_json = json.dumps(req.attachments)
-    body_html = render_body_html(req.body)
+    body_html = render_body_html(body_to_store)
 
     results = []
     for addr in recipients:
@@ -69,12 +88,12 @@ async def send_message(req: SendRequest, request: Request):
             """INSERT INTO messages (id, thread_id, from_agent, to_agent, action, subject, body, attachments, is_read, parent_id, created_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)""",
             (msg_id, thread_id, req.from_agent, addr, req.action,
-             req.subject, req.body, attachments_json, req.parent_id, now),
+             req.subject, body_to_store, attachments_json, req.parent_id, now),
         )
         results.append(MessageResponse(
             id=msg_id, thread_id=thread_id, from_agent=req.from_agent,
             to_agent=addr, action=req.action, subject=req.subject,
-            body=req.body, body_html=body_html, attachments=req.attachments,
+            body=body_to_store, body_html=body_html, attachments=req.attachments,
             is_read=False, parent_id=req.parent_id, created_at=now,
         ))
     await db.commit()
@@ -92,14 +111,15 @@ async def inbox(address: str, request: Request, agent_id: str = Query(...), all:
     # verify caller identity: agent_id must own this address
     await _verify_identity(db, agent_id, address)
 
+    vis = INBOX_VISIBILITY_SQL
     if all:
         cursor = await db.execute(
-            "SELECT * FROM messages WHERE to_agent = ? ORDER BY created_at",
+            f"SELECT * FROM messages WHERE to_agent = ? AND {vis} ORDER BY created_at",
             (address,),
         )
     else:
         cursor = await db.execute(
-            "SELECT * FROM messages WHERE to_agent = ? AND is_read = 0 ORDER BY created_at",
+            f"SELECT * FROM messages WHERE to_agent = ? AND is_read = 0 AND {vis} ORDER BY created_at",
             (address,),
         )
     rows = await cursor.fetchall()
@@ -110,7 +130,9 @@ async def inbox(address: str, request: Request, agent_id: str = Query(...), all:
 async def thread(thread_id: str, request: Request):
     db = request.app.state.db
     cursor = await db.execute(
-        "SELECT * FROM messages WHERE thread_id = ? ORDER BY created_at",
+        "SELECT * FROM messages WHERE thread_id = ? "
+        "AND id NOT IN (SELECT message_id FROM trashed_messages) "
+        "ORDER BY created_at",
         (thread_id,),
     )
     rows = await cursor.fetchall()

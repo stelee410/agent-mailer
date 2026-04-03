@@ -12,6 +12,8 @@ async def test_init_creates_tables():
     assert "agents" in tables
     assert "messages" in tables
     assert "archived_threads" in tables
+    assert "trashed_threads" in tables
+    assert "trashed_messages" in tables
 
 
 async def test_init_is_idempotent():

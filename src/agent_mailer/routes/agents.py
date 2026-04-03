@@ -113,7 +113,7 @@ GET {broker_url}/messages/inbox/{agent['address']}?agent_id={agent['id']}
 ### 发件 (发送消息)
 ```
 POST {broker_url}/messages/send
-Body: {{"agent_id": "{agent['id']}", "from_agent": "{agent['address']}", "to_agent": "<目标agent地址>", "action": "send|reply|forward", "subject": "...", "body": "...", "parent_id": "<可选>"}}
+Body: {{"agent_id": "{agent['id']}", "from_agent": "{agent['address']}", "to_agent": "<目标agent地址>", "action": "send|reply|forward", "subject": "...", "body": "...", "parent_id": "<reply/forward 时必填>", "forward_scope": "<可选，仅 forward：message=仅父邮件 | thread=整线（不含已删单封）>"}}
 ```
 
 ### 标记已读
