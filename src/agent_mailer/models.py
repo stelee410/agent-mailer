@@ -90,3 +90,9 @@ class ThreadSummary(BaseModel):
     message_count: int
     unread_count: int
     preview_subject: str = ""
+    archived_at: str | None = None  # set when listing archived threads
+
+
+class ThreadArchiveStatus(BaseModel):
+    archived: bool
+    archived_at: str | None = None

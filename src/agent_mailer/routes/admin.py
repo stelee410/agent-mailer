@@ -2,9 +2,16 @@ import json
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
-from agent_mailer.models import AdminSendRequest, AgentStats, MessageResponse, ThreadSummary, render_body_html
+from agent_mailer.models import (
+    AdminSendRequest,
+    AgentStats,
+    MessageResponse,
+    ThreadArchiveStatus,
+    ThreadSummary,
+    render_body_html,
+)
 
 router = APIRouter(prefix="/admin")
 
@@ -75,12 +82,18 @@ async def agents_stats(request: Request):
     return [AgentStats(**dict(row)) for row in rows]
 
 
-@router.get("/threads/summary", response_model=list[ThreadSummary])
-async def threads_summary(request: Request):
-    """List all message threads for the operator console (newest activity first)."""
-    db = request.app.state.db
-    cursor = await db.execute(
-        """
+def _threads_summary_sql(archived: bool) -> str:
+    where = (
+        "m.thread_id IN (SELECT thread_id FROM archived_threads)"
+        if archived
+        else "m.thread_id NOT IN (SELECT thread_id FROM archived_threads)"
+    )
+    archived_col = (
+        "(SELECT a.archived_at FROM archived_threads a WHERE a.thread_id = m.thread_id LIMIT 1) AS archived_at"
+        if archived
+        else "NULL AS archived_at"
+    )
+    return f"""
         SELECT
             m.thread_id AS thread_id,
             MAX(m.created_at) AS last_activity,
@@ -92,12 +105,23 @@ async def threads_summary(request: Request):
                 WHERE m2.thread_id = m.thread_id
                 ORDER BY m2.created_at ASC
                 LIMIT 1
-            ) AS preview_subject
+            ) AS preview_subject,
+            {archived_col}
         FROM messages m
+        WHERE {where}
         GROUP BY m.thread_id
         ORDER BY last_activity DESC
         """
-    )
+
+
+@router.get("/threads/summary", response_model=list[ThreadSummary])
+async def threads_summary(
+    request: Request,
+    archived: bool = Query(False, description="If true, list archived threads only; default lists active threads."),
+):
+    """List message threads for the operator console (newest activity first)."""
+    db = request.app.state.db
+    cursor = await db.execute(_threads_summary_sql(archived))
     rows = await cursor.fetchall()
     return [
         ThreadSummary(
@@ -106,9 +130,49 @@ async def threads_summary(request: Request):
             message_count=int(row["message_count"]),
             unread_count=int(row["unread_count"]),
             preview_subject=row["preview_subject"] or "",
+            archived_at=row["archived_at"],
         )
         for row in rows
     ]
+
+
+@router.get("/threads/{thread_id}/archive", response_model=ThreadArchiveStatus)
+async def thread_archive_status(thread_id: str, request: Request):
+    db = request.app.state.db
+    cursor = await db.execute(
+        "SELECT archived_at FROM archived_threads WHERE thread_id = ?",
+        (thread_id,),
+    )
+    row = await cursor.fetchone()
+    if row:
+        return ThreadArchiveStatus(archived=True, archived_at=row["archived_at"])
+    return ThreadArchiveStatus(archived=False, archived_at=None)
+
+
+@router.post("/threads/{thread_id}/archive")
+async def archive_thread(thread_id: str, request: Request):
+    db = request.app.state.db
+    cursor = await db.execute(
+        "SELECT 1 FROM messages WHERE thread_id = ? LIMIT 1",
+        (thread_id,),
+    )
+    if not await cursor.fetchone():
+        raise HTTPException(status_code=404, detail="Thread not found")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.execute(
+        "INSERT OR REPLACE INTO archived_threads (thread_id, archived_at) VALUES (?, ?)",
+        (thread_id, now),
+    )
+    await db.commit()
+    return {"ok": True, "thread_id": thread_id, "archived_at": now}
+
+
+@router.post("/threads/{thread_id}/unarchive")
+async def unarchive_thread(thread_id: str, request: Request):
+    db = request.app.state.db
+    await db.execute("DELETE FROM archived_threads WHERE thread_id = ?", (thread_id,))
+    await db.commit()
+    return {"ok": True, "thread_id": thread_id}
 
 
 @router.get("/messages/inbox/{address}", response_model=list[MessageResponse])

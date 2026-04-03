@@ -11,6 +11,7 @@ async def test_init_creates_tables():
     await db.close()
     assert "agents" in tables
     assert "messages" in tables
+    assert "archived_threads" in tables
 
 
 async def test_init_is_idempotent():

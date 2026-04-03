@@ -71,6 +71,49 @@ async def test_threads_summary(client, agents):
     assert summaries[0]["unread_count"] == 2
 
 
+async def test_thread_archive_and_summary_filter(client, agents):
+    send = await client.post("/messages/send", json={
+        "agent_id": agents["planner"]["id"],
+        "from_agent": agents["planner"]["address"],
+        "to_agent": agents["coder"]["address"],
+        "action": "send",
+        "subject": "Keep me",
+        "body": "x",
+    })
+    tid = send.json()["thread_id"]
+
+    st = await client.get(f"/admin/threads/{tid}/archive")
+    assert st.status_code == 200
+    assert st.json() == {"archived": False, "archived_at": None}
+
+    bad = await client.post("/admin/threads/not-a-real-thread-id/archive")
+    assert bad.status_code == 404
+
+    arc = await client.post(f"/admin/threads/{tid}/archive")
+    assert arc.status_code == 200
+    assert arc.json()["thread_id"] == tid
+
+    st2 = await client.get(f"/admin/threads/{tid}/archive")
+    assert st2.json()["archived"] is True
+    assert st2.json()["archived_at"]
+
+    active = await client.get("/admin/threads/summary")
+    assert len(active.json()) == 0
+
+    archived = await client.get("/admin/threads/summary", params={"archived": True})
+    ar_list = archived.json()
+    assert len(ar_list) == 1
+    assert ar_list[0]["thread_id"] == tid
+    assert ar_list[0]["preview_subject"] == "Keep me"
+    assert ar_list[0]["archived_at"]
+
+    un = await client.post(f"/admin/threads/{tid}/unarchive")
+    assert un.status_code == 200
+
+    active2 = await client.get("/admin/threads/summary")
+    assert len(active2.json()) == 1
+
+
 async def test_stats_counts(client, agents):
     # planner sends 2 messages to coder
     for i in range(2):
@@ -267,3 +310,4 @@ async def test_ui_returns_html(client):
     assert "text/html" in resp.headers["content-type"]
     assert "Agent Mailer" in resp.text
     assert "Operator Console" in resp.text
+    assert "Archive" in resp.text

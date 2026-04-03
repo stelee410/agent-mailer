@@ -29,6 +29,14 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 """
 
+# Thread archive (operator console); additive migration — existing DBs keep all message rows.
+ARCHIVED_THREADS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS archived_threads (
+    thread_id TEXT PRIMARY KEY,
+    archived_at TEXT NOT NULL
+);
+"""
+
 
 async def get_db(db_path: str = DB_PATH) -> aiosqlite.Connection:
     db = await aiosqlite.connect(db_path)
@@ -39,4 +47,5 @@ async def get_db(db_path: str = DB_PATH) -> aiosqlite.Connection:
 
 async def init_db(db: aiosqlite.Connection):
     await db.executescript(SCHEMA)
+    await db.executescript(ARCHIVED_THREADS_SCHEMA)
     await db.commit()
