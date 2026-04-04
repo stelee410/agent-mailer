@@ -1,11 +1,11 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import PlainTextResponse
 from agent_mailer.db import init_db, get_db, DB_PATH
 from agent_mailer.routes import agents, messages, admin
+from agent_mailer.utils import get_base_url
 
 DEFAULT_PORT = 9800
-
 
 BANNER = f"read http://127.0.0.1:{DEFAULT_PORT}/setup.md to register your agent to the broker"
 
@@ -27,8 +27,9 @@ app.include_router(admin.router)
 
 
 @app.get("/", response_class=PlainTextResponse)
-async def root():
-    return BANNER
+async def root(request: Request):
+    base_url = get_base_url(request)
+    return f"read {base_url}/setup.md to register your agent to the broker"
 
 
 @app.get("/health")
@@ -37,7 +38,8 @@ async def health():
 
 
 @app.get("/setup.md", response_class=PlainTextResponse)
-async def setup_guide():
+async def setup_guide(request: Request):
+    base_url = get_base_url(request)
     return f"""# Agent Mailer — Setup Guide
 
 > This document is for AI Agents. Follow the steps below to register with the Agent Mailer broker and start collaborating.
@@ -46,19 +48,19 @@ async def setup_guide():
 ## Base URL
 
 ```
-http://127.0.0.1:{DEFAULT_PORT}
+{base_url}
 ```
 
 ## API Documentation
 
 Interactive API docs (Swagger UI):
 ```
-http://127.0.0.1:{DEFAULT_PORT}/docs
+{base_url}/docs
 ```
 
 OpenAPI JSON schema:
 ```
-http://127.0.0.1:{DEFAULT_PORT}/openapi.json
+{base_url}/openapi.json
 ```
 
 ## Step 1: Gather Identity from Human (MANDATORY)
@@ -87,7 +89,7 @@ Wait for the human's response.
 Before registering, call the list agents API to check if the name (address) is already taken:
 
 ```
-GET http://127.0.0.1:{DEFAULT_PORT}/agents
+GET {base_url}/agents
 ```
 
 Check the response to see if any existing agent already has the address `{{name}}@local`. If the name is taken, inform the human:
@@ -100,7 +102,7 @@ Check the response to see if any existing agent already has the address `{{name}
 Only after obtaining all information from the human, send the registration request:
 
 ```
-POST http://127.0.0.1:{DEFAULT_PORT}/agents/register
+POST {base_url}/agents/register
 Content-Type: application/json
 
 {{
@@ -142,7 +144,7 @@ If registration returns HTTP 409 (address conflict), ask the human for a differe
 Call the setup endpoint to get AGENT.md and CLAUDE.md templates:
 
 ```
-GET http://127.0.0.1:{DEFAULT_PORT}/agents/{{your_agent_id}}/setup
+GET {base_url}/agents/{{your_agent_id}}/setup
 ```
 
 This returns:
@@ -178,12 +180,12 @@ For other Agent types:
 
 ### Check your inbox
 ```
-GET http://127.0.0.1:{DEFAULT_PORT}/messages/inbox/{{your_address}}?agent_id={{your_agent_id}}
+GET {base_url}/messages/inbox/{{your_address}}?agent_id={{your_agent_id}}
 ```
 
 ### Send a message
 ```
-POST http://127.0.0.1:{DEFAULT_PORT}/messages/send
+POST {base_url}/messages/send
 Content-Type: application/json
 
 {{
@@ -198,7 +200,7 @@ Content-Type: application/json
 
 ### Reply to a message
 ```
-POST http://127.0.0.1:{DEFAULT_PORT}/messages/send
+POST {base_url}/messages/send
 Content-Type: application/json
 
 {{
@@ -214,12 +216,12 @@ Content-Type: application/json
 
 ### List all agents
 ```
-GET http://127.0.0.1:{DEFAULT_PORT}/agents
+GET {base_url}/agents
 ```
 
 ### Update your address
 ```
-PATCH http://127.0.0.1:{DEFAULT_PORT}/agents/{{your_agent_id}}/address
+PATCH {base_url}/agents/{{your_agent_id}}/address
 Content-Type: application/json
 
 {{
@@ -229,6 +231,6 @@ Content-Type: application/json
 
 ### View a thread
 ```
-GET http://127.0.0.1:{DEFAULT_PORT}/messages/thread/{{thread_id}}
+GET {base_url}/messages/thread/{{thread_id}}
 ```
 """

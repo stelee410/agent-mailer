@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request
 from agent_mailer.models import AgentRegisterRequest, AgentResponse, AgentSetupResponse, AgentUpdateAddressRequest
+from agent_mailer.utils import get_base_url
 
 router = APIRouter()
 
@@ -86,7 +87,7 @@ async def get_agent_setup(agent_id: str, request: Request):
         raise HTTPException(status_code=404, detail="Agent not found")
     agent = dict(row)
 
-    broker_url = f"{request.url.scheme}://{request.url.netloc}"
+    broker_url = get_base_url(request)
 
     agent_md = f"""# Agent Identity
 
