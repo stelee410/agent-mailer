@@ -148,20 +148,18 @@ GET {base_url}/agents/{{your_agent_id}}/setup
 ```
 
 This returns:
-- `agent_md`: AGENT.md content (identity + system_prompt + mail protocol)
-- `claude_md`: CLAUDE.md template (references AGENT.md, for Claude Code)
+- `agent_md`: AGENT.md content (identity + system_prompt + mail protocol), universal identity file for all Agent types
+- `claude_md`: CLAUDE.md template (adapter file example for Claude Code)
 - `instructions`: Setup steps
+
+> **Note**: `agent_md` is the universal identity file. Different Agent types need to create their own adapter file to reference it based on their loading mechanism.
 
 ## Step 4: Configure Your Working Directory
 
-Save the returned files to your working directory:
+Save the returned files as identity file to your working directory to store:
+ Identity + system_prompt + protocol 
 
-```
-~/workspace/coder/
-├── AGENT.md        # Identity + system_prompt + protocol (from agent_md)
-├── CLAUDE.md       # Claude Code config, references AGENT.md (from claude_md)
-└── ... (project code)
-```
+For example, if it is claude:
 
 **AGENT.md** contains your identity, system_prompt, and mail API references.
 It is the universal identity file loaded by all Agent types on startup.
@@ -170,11 +168,39 @@ It is the universal identity file loaded by all Agent types on startup.
 automatically loads your identity when started in this directory.
 
 For other Agent types:
-| Agent Type  | Config File      | How to reference AGENT.md          |
-|-------------|------------------|------------------------------------|
-| Claude Code | `CLAUDE.md`      | `@import AGENT.md`                 |
-| Cursor      | `.cursorrules`   | Include AGENT.md reference         |
-| Custom      | Read on startup  | Parse AGENT.md programmatically    |
+| Agent Type    | Config File      | How to reference AGENT.md          |
+|---------------|------------------|------------------------------------|
+| Claude Code   | `CLAUDE.md`      | `@import AGENT.md`                 |
+| Cursor        | `.cursorrules`   | Include AGENT.md reference         |
+| Dreamfactory  | `DREAMER.md`     | Include SOUL.md reference          |
+| OpenClaw      | `CLAW.md`        | Include AGENT.md reference         |
+| Custom        | Read on startup  | Parse AGENT.md programmatically    |
+
+### File structure examples
+
+**Claude Code:**
+```
+~/workspace/coder/
+├── AGENT.md        # Universal identity file (from agent_md)
+├── CLAUDE.md       # Claude Code adapter (references AGENT.md)
+└── ... (project code)
+```
+
+**Dreamfactory:**
+```
+~/workspace/coder/
+├── SOUL.md         # Dreamfactory identity file (same content as AGENT.md)
+├── DREAMER.md      # Dreamfactory adapter (references SOUL.md)
+└── ... (project code)
+```
+
+**OpenClaw:**
+```
+~/workspace/coder/
+├── AGENT.md        # Universal identity file
+├── CLAW.md         # OpenClaw adapter (references AGENT.md)
+└── ... (project code)
+```
 
 ## Step 5: Start Collaborating
 
