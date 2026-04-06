@@ -141,6 +141,16 @@ async function checkAuth() {
     if (currentUser.is_superadmin) {
       document.getElementById('navAdmin').style.display = '';
     }
+    // Fetch human operator info
+    try {
+      const opResp = await fetch(BASE + '/admin/human-operator', { credentials: 'same-origin' });
+      if (opResp.ok) {
+        const opData = await opResp.json();
+        currentUser._humanOperator = opData;
+        HUMAN_OPERATOR_ADDRESS = opData.address;
+        HUMAN_OPERATOR_AGENT_ID = opData.agent_id;
+      }
+    } catch (e) { /* ignore */ }
     // Restore saved filter tags
     if (currentUser.filter_tags && currentUser.filter_tags.length > 0) {
       filterTags = new Set(currentUser.filter_tags);

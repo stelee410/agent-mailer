@@ -121,6 +121,17 @@ async function trashSingleMessage(messageId, opts = {}) {
 
 // --- Inbox view ---
 
+async function showHumanInbox() {
+  if (!HUMAN_OPERATOR_ADDRESS) return;
+  clearNav();
+  document.getElementById('navInbox').classList.add('active');
+  setSidebarSpecialMode('none');
+  currentView = { type: 'inbox', address: HUMAN_OPERATOR_ADDRESS, agentId: HUMAN_OPERATOR_AGENT_ID };
+  document.getElementById('main').innerHTML = '';
+  await refreshSidebar();
+  await renderInbox();
+}
+
 async function showInbox(address, agentId) {
   clearNav();
   setSidebarSpecialMode('none');

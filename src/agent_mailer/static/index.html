@@ -118,7 +118,8 @@
   </div>
 </div>
 <div class="nav-buttons" id="navButtons">
-  <button class="nav-btn" id="navCompose" onclick="showCompose()"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Inbox</button>
+  <button class="nav-btn" id="navInbox" onclick="showHumanInbox()"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Inbox</button>
+  <button class="nav-btn" id="navCompose" onclick="showCompose()"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Compose</button>
   <button class="nav-btn" id="navStats" onclick="showStats()"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Stats</button>
   <button class="nav-btn" id="navArchive" onclick="showArchive()"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>Archive</button>
   <button class="nav-btn" id="navTrash" onclick="showTrash()"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>Trash</button>
@@ -139,9 +140,10 @@
 
 <script>
 const BASE = '';
-const HUMAN_OPERATOR_ADDRESS = 'human-operator@local';
+let HUMAN_OPERATOR_ADDRESS = '';
+let HUMAN_OPERATOR_AGENT_ID = '';
 function humanSubjectClass(fromAgent) {
-  return fromAgent === HUMAN_OPERATOR_ADDRESS ? ' msg-subject-human' : '';
+  return HUMAN_OPERATOR_ADDRESS && fromAgent === HUMAN_OPERATOR_ADDRESS ? ' msg-subject-human' : '';
 }
 let agents = [];
 let statsData = [];

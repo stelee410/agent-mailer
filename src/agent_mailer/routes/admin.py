@@ -100,8 +100,9 @@ async def _ensure_human_operator(db, user: dict):
     op_id = _human_operator_id(user["id"])
     op_address = _human_operator_address(user["username"])
     await db.execute(
-        """INSERT OR IGNORE INTO agents (id, name, address, role, description, system_prompt, user_id, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        """INSERT INTO agents (id, name, address, role, description, system_prompt, user_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (id) DO NOTHING""",
         (
             op_id,
             "Human Operator",
@@ -132,6 +133,13 @@ async def admin_list_agents(request: Request, user: dict = Depends(get_current_u
     )
     rows = await cursor.fetchall()
     return [AgentResponse(**_parse_agent(row)) for row in rows]
+
+
+@router.get("/human-operator")
+async def get_human_operator(request: Request, user: dict = Depends(get_current_user)):
+    db = request.app.state.db
+    op_id, op_address = await _ensure_human_operator(db, user)
+    return {"agent_id": op_id, "address": op_address}
 
 
 @router.get("/messages/thread/{thread_id}", response_model=list[MessageResponse])
