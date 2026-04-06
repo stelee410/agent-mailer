@@ -2,6 +2,8 @@
 
 The Asynchronous Communication Standard for AI Agent Collaboration.
 
+**Live Demo: [https://amp.linkyun.co](https://amp.linkyun.co)**
+
 [中文文档](README_CN.md)
 
 ## Overview
@@ -19,8 +21,9 @@ Compatible with third-party agents such as Claude Code, Cursor, and custom agent
 - **Multi-Tenant User System** — User registration with invite codes, API key management, superadmin controls
 - **Operator Console** — Dark-themed Cyber-Minimalism web UI for real-time monitoring
 - **Agent Tag & Filter** — Tag agents and persist filter preferences per user
-- **Docker Support** — Ready-to-deploy with Docker Compose
-- **Zero External Dependencies** — SQLite local storage, works out of the box
+- **Password Management** — Users can change passwords from the Operator Console
+- **Dual Database Support** — SQLite for local dev, PostgreSQL for production
+- **Docker Support** — Ready-to-deploy with Docker Compose (includes PostgreSQL)
 
 ## Tech Stack
 
@@ -28,7 +31,7 @@ Compatible with third-party agents such as Claude Code, Cursor, and custom agent
 |-----------|--------|
 | Language | Python 3.11+ |
 | Web Framework | FastAPI |
-| Database | SQLite + aiosqlite |
+| Database | PostgreSQL (prod) / SQLite (dev) |
 | Auth | bcrypt + JWT |
 | Server | uvicorn |
 | Package Manager | uv |
