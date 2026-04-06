@@ -484,11 +484,10 @@ async function showCompose(prefillTo, prefillSubject, prefillParentId, originalB
     <div class="card">
       <h2>${title}</h2>
       <div class="compose-form">
-        <div>
+        <div class="compose-to-wrap">
           <label>To</label>
-          <select id="composeTo">
-            ${agents.map(a => `<option value="${esc(a.address)}" ${a.address === prefillTo ? 'selected' : ''}>${esc(a.name)} (${esc(a.address)})</option>`).join('')}
-          </select>
+          <input id="composeTo" type="text" placeholder="Type agent name or address..." value="${esc(prefillTo || '')}" autocomplete="off">
+          <div class="compose-to-dropdown" id="composeToDropdown"></div>
         </div>
         <div>
           <label>Subject</label>
@@ -517,6 +516,86 @@ async function showCompose(prefillTo, prefillSubject, prefillParentId, originalB
       </div>
     </div>`;
   hydrateMarkdownBodies(main);
+  hydrateComposeToInput();
+}
+
+function hydrateComposeToInput() {
+  const input = document.getElementById('composeTo');
+  const dropdown = document.getElementById('composeToDropdown');
+  if (!input || !dropdown) return;
+  let acIdx = -1;
+
+  function render(query) {
+    const q = (query || '').trim().toLowerCase();
+    const matches = q
+      ? agents.filter(a => a.name.toLowerCase().includes(q) || a.address.toLowerCase().includes(q))
+      : agents;
+    if (matches.length === 0) {
+      dropdown.innerHTML = '<div class="compose-to-empty">No matching agents</div>';
+      dropdown.classList.add('visible');
+      return;
+    }
+    acIdx = -1;
+    dropdown.innerHTML = matches.map(a =>
+      `<div class="compose-to-item" data-address="${esc(a.address)}">${esc(a.name)} <span style="color:var(--muted)">(${esc(a.address)})</span></div>`
+    ).join('');
+    dropdown.classList.add('visible');
+  }
+
+  function pick(address) {
+    input.value = address;
+    dropdown.classList.remove('visible');
+    dropdown.innerHTML = '';
+    acIdx = -1;
+  }
+
+  function highlightItems() {
+    const items = dropdown.querySelectorAll('.compose-to-item');
+    items.forEach((it, i) => it.classList.toggle('active', i === acIdx));
+    if (acIdx >= 0 && items[acIdx]) items[acIdx].scrollIntoView({ block: 'nearest' });
+  }
+
+  input.addEventListener('focus', () => render(input.value));
+  input.addEventListener('input', () => render(input.value));
+  input.addEventListener('blur', () => {
+    setTimeout(() => { dropdown.classList.remove('visible'); }, 150);
+  });
+
+  dropdown.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    const item = e.target.closest('.compose-to-item');
+    if (item) pick(item.dataset.address);
+  });
+
+  input.addEventListener('keydown', (e) => {
+    const items = dropdown.querySelectorAll('.compose-to-item');
+    const vis = dropdown.classList.contains('visible');
+    if (e.key === 'ArrowDown' && vis) {
+      e.preventDefault();
+      acIdx = Math.min(acIdx + 1, items.length - 1);
+      highlightItems();
+      return;
+    }
+    if (e.key === 'ArrowUp' && vis) {
+      e.preventDefault();
+      acIdx = Math.max(acIdx - 1, -1);
+      highlightItems();
+      return;
+    }
+    if (e.key === 'Escape') {
+      dropdown.classList.remove('visible');
+      acIdx = -1;
+      return;
+    }
+    if (e.key === 'Enter' && vis) {
+      e.preventDefault();
+      if (acIdx >= 0 && items[acIdx]) {
+        pick(items[acIdx].dataset.address);
+      } else if (items.length === 1) {
+        pick(items[0].dataset.address);
+      }
+    }
+  });
 }
 
 function replyToMsg(msgId, ev) {
@@ -557,8 +636,18 @@ async function doSend() {
 
   const mode = (document.getElementById('composeMode') || {}).value || 'send';
   const parentId = document.getElementById('composeParentId').value;
+  const toValue = document.getElementById('composeTo').value.trim();
+
+  // Validate address exists
+  if (!agents.some(a => a.address === toValue)) {
+    status.className = 'compose-status error';
+    status.textContent = 'Error: Address "' + toValue + '" does not exist. Please select a valid agent.';
+    btn.disabled = false;
+    return;
+  }
+
   const body = {
-    to_agent: document.getElementById('composeTo').value,
+    to_agent: toValue,
     subject: document.getElementById('composeSubject').value,
     body: document.getElementById('composeBody').value,
   };

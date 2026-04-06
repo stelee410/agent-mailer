@@ -179,6 +179,13 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); heig
 .compose-form label.compose-radio-row:last-of-type { margin-bottom: 0; }
 .compose-form .compose-forward-hint { font-size: 12px; color: var(--muted); margin: 0 0 10px; line-height: 1.4; }
 .compose-form .compose-forward-scope > label:first-of-type { display: block; }
+/* Compose To autocomplete */
+.compose-to-wrap { position: relative; }
+.compose-to-dropdown { position: absolute; top: 100%; left: 0; right: 0; max-height: 240px; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); z-index: 50; margin-top: 4px; display: none; }
+.compose-to-dropdown.visible { display: block; }
+.compose-to-item { padding: 10px 14px; font-size: 13px; cursor: pointer; transition: background 0.1s; color: var(--text); }
+.compose-to-item:hover, .compose-to-item.active { background: var(--primary-light); color: var(--accent-bright); }
+.compose-to-empty { padding: 10px 14px; font-size: 12px; color: var(--danger); font-family: var(--mono); }
 .compose-form textarea { min-height: 200px; resize: vertical; }
 .btn { padding: 8px 20px; border: none; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; font-family: var(--mono); letter-spacing: 0.3px; }
 .btn-primary { background: var(--primary); color: #fff; }
