@@ -99,10 +99,13 @@ async def _purge_thread_messages(db, thread_id: str) -> None:
 async def _ensure_human_operator(db, user: dict):
     op_id = _human_operator_id(user["id"])
     op_address = _human_operator_address(user["username"])
+    # Check if already exists
+    cursor = await db.execute("SELECT id FROM agents WHERE id = ? OR address = ?", (op_id, op_address))
+    if await cursor.fetchone():
+        return op_id, op_address
     await db.execute(
         """INSERT INTO agents (id, name, address, role, description, system_prompt, user_id, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-           ON CONFLICT (id) DO NOTHING""",
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             op_id,
             "Human Operator",
