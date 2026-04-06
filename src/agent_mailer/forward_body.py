@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import aiosqlite
-
 
 def _format_message_block(m: dict) -> str:
     lines = [
@@ -20,7 +18,7 @@ def _format_message_block(m: dict) -> str:
 
 
 async def build_forward_body(
-    db: aiosqlite.Connection,
+    db,
     *,
     parent_id: str,
     forward_scope: str,

@@ -11,6 +11,7 @@ dependencies = [
     "bcrypt>=4.0",
     "pyjwt>=2.8",
     "python-dotenv>=1.0",
+    "asyncpg>=0.29",
 ]
 
 [project.optional-dependencies]

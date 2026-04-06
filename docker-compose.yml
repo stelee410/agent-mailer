@@ -1,15 +1,33 @@
 services:
+  db:
+    image: postgres:16-alpine
+    container_name: agent-mailer-db
+    environment:
+      POSTGRES_USER: amp
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-amp_secret_2026}
+      POSTGRES_DB: agent_mailer
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U amp -d agent_mailer"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   agent-mailer:
     build: .
     container_name: agent-mailer
     ports:
       - "80:9800"
     environment:
+      - DATABASE_URL=postgresql://amp:${POSTGRES_PASSWORD:-amp_secret_2026}@db:5432/agent_mailer
       - AGENT_MAILER_SECRET_KEY=${AGENT_MAILER_SECRET_KEY}
       - AGENT_MAILER_DOMAIN=amp.linkyun.co
-    volumes:
-      - agent-mailer-data:/data
+    depends_on:
+      db:
+        condition: service_healthy
     restart: always
 
 volumes:
-  agent-mailer-data:
+  pgdata:
