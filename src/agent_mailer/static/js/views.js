@@ -784,7 +784,12 @@ async function renderApiKeys(newKeyData) {
               <td style="color:var(--muted);font-size:12px">${esc(fmtTime(k.created_at))}</td>
               <td style="color:var(--muted);font-size:12px">${k.last_used_at ? esc(fmtTime(k.last_used_at)) : '—'}</td>
               <td><span class="${k.is_active !== false ? 'apikey-status-active' : 'apikey-status-inactive'}">${k.is_active !== false ? 'Active' : 'Inactive'}</span></td>
-              <td><button class="btn-danger-sm" onclick="deactivateApiKey('${esc(k.id)}', '${esc(k.name)}')">Deactivate</button></td>
+              <td style="display:flex;gap:6px;flex-wrap:wrap">
+                ${k.is_active !== false
+                  ? `<button class="btn-danger-sm" onclick="deactivateApiKey('${esc(k.id)}', '${esc(k.name)}')">Deactivate</button>`
+                  : `<button class="btn-sm" onclick="reactivateApiKey('${esc(k.id)}', '${esc(k.name)}')">Reactivate</button>`}
+                <button class="btn-danger-sm" onclick="deleteApiKey('${esc(k.id)}', '${esc(k.name)}')">Delete</button>
+              </td>
             </tr>
           `).join('')}
         </tbody>
@@ -870,6 +875,26 @@ async function createApiKey() {
 
 async function deactivateApiKey(keyId, keyName) {
   const ok = await showConfirm('Deactivate API Key', `Deactivate key "${keyName}"? It will stop working immediately.`, 'Deactivate');
+  if (!ok) return;
+  try {
+    await api(`/users/api-keys/${encodeURIComponent(keyId)}/deactivate`, { method: 'POST' });
+    await renderApiKeys();
+  } catch (e) {
+    alert('Failed: ' + e.message);
+  }
+}
+
+async function reactivateApiKey(keyId, keyName) {
+  try {
+    await api(`/users/api-keys/${encodeURIComponent(keyId)}/reactivate`, { method: 'POST' });
+    await renderApiKeys();
+  } catch (e) {
+    alert('Failed: ' + e.message);
+  }
+}
+
+async function deleteApiKey(keyId, keyName) {
+  const ok = await showConfirm('Delete API Key', `Permanently delete key "${keyName}"? This cannot be undone.`, 'Delete');
   if (!ok) return;
   try {
     await api(`/users/api-keys/${encodeURIComponent(keyId)}`, { method: 'DELETE' });
