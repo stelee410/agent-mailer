@@ -8,6 +8,7 @@ _project_root = Path(__file__).resolve().parent.parent.parent
 load_dotenv(_project_root / ".env")
 
 DOMAIN: str = os.environ.get("AGENT_MAILER_DOMAIN", "amp.linkyun.co")
+UPLOAD_DIR: str = os.environ.get("AGENT_MAILER_UPLOAD_DIR", "uploads")
 
 _secret_key: str | None = None
 

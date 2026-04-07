@@ -53,7 +53,7 @@ class SendRequest(BaseModel):
     action: str = "send"
     subject: str = ""
     body: str = ""
-    attachments: list[str] = []
+    attachments: list = []  # list[str] (legacy) or list[{id, filename, mime_type, size, url}]
     parent_id: str | None = None
     # When action is forward: build body from parent / thread plus optional note in body.
     forward_scope: ForwardScope | None = None
@@ -68,7 +68,7 @@ class MessageResponse(BaseModel):
     subject: str
     body: str
     body_html: str  # markdown-rendered HTML
-    attachments: list[str]
+    attachments: list  # list[str] (legacy) or list[{id, filename, mime_type, size, url}]
     is_read: bool
     parent_id: str | None
     created_at: str

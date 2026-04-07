@@ -87,6 +87,17 @@ PG_SCHEMA = [
         is_active INTEGER NOT NULL DEFAULT 1
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS files (
+        id TEXT PRIMARY KEY,
+        filename TEXT NOT NULL,
+        mime_type TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        stored_path TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    )
+    """,
 ]
 
 # SQLite-only legacy schema (for CREATE TABLE IF NOT EXISTS + additive migrations)
@@ -170,6 +181,18 @@ CREATE TABLE IF NOT EXISTS api_keys (
     last_used_at TEXT,
     is_active INTEGER NOT NULL DEFAULT 1,
     FOREIGN KEY (user_id) REFERENCES users(id)
+);
+"""
+
+FILES_SCHEMA = """
+CREATE TABLE IF NOT EXISTS files (
+    id TEXT PRIMARY KEY,
+    filename TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    stored_path TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    created_at TEXT NOT NULL
 );
 """
 
@@ -361,6 +384,7 @@ async def init_db(db):
         await db.executescript(USERS_SCHEMA)
         await db.executescript(INVITE_CODES_SCHEMA)
         await db.executescript(API_KEYS_SCHEMA)
+        await db.executescript(FILES_SCHEMA)
         await _add_column_if_missing(db, "agents", "tags", "TEXT NOT NULL DEFAULT '[]'")
         await _add_column_if_missing(db, "agents", "user_id", "TEXT")
         await _add_column_if_missing(db, "users", "filter_tags", "TEXT NOT NULL DEFAULT '[]'")

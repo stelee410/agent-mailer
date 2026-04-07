@@ -24,6 +24,9 @@ services:
       - DATABASE_URL=postgresql://amp:${POSTGRES_PASSWORD:-amp_secret_2026}@db:5432/agent_mailer
       - AGENT_MAILER_SECRET_KEY=${AGENT_MAILER_SECRET_KEY}
       - AGENT_MAILER_DOMAIN=amp.linkyun.co
+      - AGENT_MAILER_UPLOAD_DIR=/data/uploads
+    volumes:
+      - uploads:/data/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -31,3 +34,4 @@ services:
 
 volumes:
   pgdata:
+  uploads:

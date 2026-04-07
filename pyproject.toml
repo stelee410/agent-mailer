@@ -12,6 +12,7 @@ dependencies = [
     "pyjwt>=2.8",
     "python-dotenv>=1.0",
     "asyncpg>=0.29",
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]
