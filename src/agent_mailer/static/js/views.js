@@ -517,8 +517,17 @@ async function showCompose(prefillTo, prefillSubject, prefillParentId, originalB
         </div>
         ${forwardScopeBlock}
         <div>
-          <label>Body</label>
+          <label>Body <span style="font-weight:normal;color:var(--muted);font-size:11px">— type @ to insert image reference</span></label>
           <textarea id="composeBody" placeholder="${esc(bodyPlaceholder)}"></textarea>
+          <div class="compose-at-dropdown" id="composeAtDropdown"></div>
+        </div>
+        <div>
+          <label>Attachments</label>
+          <div class="compose-upload-zone" id="composeUploadZone">
+            <div class="upload-hint">Drop images here, paste (Ctrl+V), or <label class="upload-browse" for="composeFileInput">browse</label></div>
+            <input type="file" id="composeFileInput" accept="image/png,image/jpeg,image/gif,image/webp" multiple style="display:none">
+          </div>
+          <div class="compose-attachments" id="composeAttachments"></div>
         </div>
         ${originalBody ? (originalBodyHtml ? `
         <div>
@@ -539,6 +548,150 @@ async function showCompose(prefillTo, prefillSubject, prefillParentId, originalB
     </div>`;
   hydrateMarkdownBodies(main);
   hydrateComposeToInput();
+  hydrateComposeUpload();
+  hydrateComposeAtReference();
+}
+
+// --- Compose upload state ---
+let composeUploadedFiles = [];
+
+function renderComposeAttachments() {
+  const container = document.getElementById('composeAttachments');
+  if (!container) return;
+  if (composeUploadedFiles.length === 0) { container.innerHTML = ''; return; }
+  container.innerHTML = composeUploadedFiles.map((f, i) => `
+    <div class="compose-attachment-item">
+      <img src="${esc(f.url)}" class="compose-attachment-thumb" alt="${esc(f.filename)}">
+      <div class="compose-attachment-info">
+        <span class="compose-attachment-name">${esc(f.filename)}</span>
+        <span class="compose-attachment-size">${(f.size / 1024).toFixed(1)} KB</span>
+      </div>
+      <button class="compose-attachment-remove" onclick="removeComposeAttachment(${i})">&times;</button>
+    </div>
+  `).join('');
+}
+
+function removeComposeAttachment(idx) {
+  composeUploadedFiles.splice(idx, 1);
+  renderComposeAttachments();
+}
+
+async function uploadFile(file) {
+  const zone = document.getElementById('composeUploadZone');
+  const hint = zone?.querySelector('.upload-hint');
+  if (hint) hint.textContent = 'Uploading...';
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    const resp = await fetch(BASE + '/files/upload', {
+      method: 'POST',
+      credentials: 'same-origin',
+      body: formData,
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || 'Upload failed');
+    }
+    const data = await resp.json();
+    composeUploadedFiles.push(data);
+    renderComposeAttachments();
+  } catch (e) {
+    const status = document.getElementById('composeStatus');
+    if (status) {
+      status.className = 'compose-status error';
+      status.textContent = 'Upload error: ' + e.message;
+    }
+  } finally {
+    if (hint) hint.innerHTML = 'Drop images here, paste (Ctrl+V), or <label class="upload-browse" for="composeFileInput">browse</label>';
+  }
+}
+
+function hydrateComposeUpload() {
+  composeUploadedFiles = [];
+  const zone = document.getElementById('composeUploadZone');
+  const fileInput = document.getElementById('composeFileInput');
+  if (!zone || !fileInput) return;
+
+  // File input change
+  fileInput.addEventListener('change', () => {
+    for (const f of fileInput.files) uploadFile(f);
+    fileInput.value = '';
+  });
+
+  // Drag & drop
+  zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    zone.classList.remove('dragover');
+    for (const f of e.dataTransfer.files) {
+      if (f.type.startsWith('image/')) uploadFile(f);
+    }
+  });
+
+  // Ctrl+V paste
+  document.addEventListener('paste', (e) => {
+    if (currentView?.type !== 'compose') return;
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) uploadFile(file);
+      }
+    }
+  });
+}
+
+function hydrateComposeAtReference() {
+  const textarea = document.getElementById('composeBody');
+  const dropdown = document.getElementById('composeAtDropdown');
+  if (!textarea || !dropdown) return;
+  let atActive = false;
+
+  textarea.addEventListener('input', () => {
+    const val = textarea.value;
+    const pos = textarea.selectionStart;
+    // Check if @ was just typed with no preceding word char
+    if (pos > 0 && val[pos - 1] === '@' && (pos === 1 || /\s/.test(val[pos - 2]))) {
+      if (composeUploadedFiles.length > 0) {
+        atActive = true;
+        dropdown.innerHTML = composeUploadedFiles.map(f =>
+          `<div class="compose-at-item" data-url="${esc(f.url)}" data-name="${esc(f.filename)}">
+            <img src="${esc(f.url)}" class="compose-at-thumb">
+            <span>${esc(f.filename)}</span>
+          </div>`
+        ).join('');
+        dropdown.classList.add('visible');
+      }
+    } else if (atActive && val[pos - 1] !== '@') {
+      dropdown.classList.remove('visible');
+      atActive = false;
+    }
+  });
+
+  dropdown.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    const item = e.target.closest('.compose-at-item');
+    if (!item) return;
+    const url = item.dataset.url;
+    const name = item.dataset.name;
+    const pos = textarea.selectionStart;
+    // Replace the @ with markdown image
+    const before = textarea.value.substring(0, pos - 1);
+    const after = textarea.value.substring(pos);
+    const insert = `![${name}](${url})`;
+    textarea.value = before + insert + after;
+    textarea.selectionStart = textarea.selectionEnd = before.length + insert.length;
+    dropdown.classList.remove('visible');
+    atActive = false;
+    textarea.focus();
+  });
+
+  textarea.addEventListener('blur', () => {
+    setTimeout(() => { dropdown.classList.remove('visible'); atActive = false; }, 150);
+  });
 }
 
 function hydrateComposeToInput() {
@@ -672,6 +825,7 @@ async function doSend() {
     to_agent: toValue,
     subject: document.getElementById('composeSubject').value,
     body: document.getElementById('composeBody').value,
+    attachments: composeUploadedFiles.map(f => ({ id: f.id, filename: f.filename, mime_type: f.mime_type, size: f.size, url: f.url })),
   };
   if (mode === 'forward') {
     body.action = 'forward';

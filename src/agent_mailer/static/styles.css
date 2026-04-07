@@ -158,7 +158,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); heig
 .markdown-body th { background: var(--surface); font-weight: 600; color: var(--text-dim); }
 .markdown-body a { color: var(--accent-bright); }
 .markdown-body a:hover { text-decoration: underline; }
-.markdown-body img { max-width: 100%; height: auto; border-radius: 4px; }
+.markdown-body img { max-width: min(100%, 600px); height: auto; border-radius: 6px; border: 1px solid var(--border); }
 .markdown-body hr { border: none; border-top: 1px solid var(--border); margin: 1em 0; }
 .markdown-body .codehilite, .markdown-body .highlight { margin: 0.75em 0; }
 .markdown-body .codehilite pre, .markdown-body .highlight pre { margin: 0; }
@@ -194,6 +194,31 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); heig
 .compose-to-item:hover, .compose-to-item.active { background: var(--primary-light); color: var(--accent-bright); }
 .compose-to-empty { padding: 10px 14px; font-size: 12px; color: var(--danger); font-family: var(--mono); }
 .compose-form textarea { min-height: 200px; resize: vertical; }
+.compose-form > div { position: relative; }
+
+/* Compose upload zone */
+.compose-upload-zone { border: 2px dashed var(--border); border-radius: 8px; padding: 20px; text-align: center; transition: all 0.2s; cursor: default; }
+.compose-upload-zone:hover, .compose-upload-zone.dragover { border-color: var(--primary); background: rgba(124,58,237,0.04); }
+.upload-hint { font-size: 13px; color: var(--muted); }
+.upload-browse { color: var(--accent-bright); cursor: pointer; text-decoration: underline; }
+.upload-browse:hover { color: var(--primary); }
+
+/* Compose attachments */
+.compose-attachments { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.compose-attachment-item { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; }
+.compose-attachment-thumb { width: 36px; height: 36px; object-fit: cover; border-radius: 4px; }
+.compose-attachment-info { display: flex; flex-direction: column; }
+.compose-attachment-name { font-size: 12px; color: var(--text); font-family: var(--mono); }
+.compose-attachment-size { font-size: 10px; color: var(--muted); }
+.compose-attachment-remove { background: none; border: none; color: var(--muted); font-size: 16px; cursor: pointer; padding: 0 4px; transition: color 0.15s; }
+.compose-attachment-remove:hover { color: var(--danger); }
+
+/* Compose @ dropdown */
+.compose-at-dropdown { position: absolute; left: 0; right: 0; max-height: 200px; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); z-index: 50; margin-top: 4px; display: none; }
+.compose-at-dropdown.visible { display: block; }
+.compose-at-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer; font-size: 13px; color: var(--text); transition: background 0.1s; }
+.compose-at-item:hover { background: var(--primary-light); color: var(--accent-bright); }
+.compose-at-thumb { width: 28px; height: 28px; object-fit: cover; border-radius: 4px; }
 .btn { padding: 8px 20px; border: none; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; font-family: var(--mono); letter-spacing: 0.3px; }
 .btn-primary { background: var(--primary); color: #fff; }
 .btn-primary:hover { background: #6d28d9; box-shadow: 0 0 20px rgba(124,58,237,0.3); }
