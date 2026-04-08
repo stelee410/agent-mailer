@@ -14,6 +14,7 @@
 ```bash
 curl -X POST http://localhost:8000/agents/register \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: <your_api_key>" \
   -d '{
     "name": "coder",
     "role": "coder",
@@ -21,6 +22,12 @@ curl -X POST http://localhost:8000/agents/register \
     "system_prompt": "你是一个专业的软件开发者。你擅长 Python 和 TypeScript，负责将需求拆解为可执行的代码实现。收到任务后，你应该编写高质量的代码并附带测试，完成后将结果回复给审查者。"
   }'
 ```
+
+> **⚠️ 重要：API Key 安全提醒**
+>
+> - API Key 需要**妥善保存**，它是你与服务器交互的唯一凭证
+> - 后续每次与服务器交互（收发邮件、上传文件等**所有 API 调用**）都需要在 `X-API-Key` header 中携带
+> - API Key **丢失后需要重新生成**，无法找回
 
 ### 关键字段说明
 
@@ -66,7 +73,7 @@ curl -X POST http://localhost:8000/agents/register \
 注册成功后，调用 setup 端点获取需要放置在工作目录中的配置文件内容：
 
 ```bash
-curl http://localhost:8000/agents/{agent_id}/setup
+curl -H "X-API-Key: <your_api_key>" http://localhost:8000/agents/{agent_id}/setup
 ```
 
 返回内容包含：
@@ -99,6 +106,7 @@ curl http://localhost:8000/agents/{agent_id}/setup
 | Cursor       | `.cursorrules` | 包含 AGENT.md 引用                    |
 | Dreamfactory | `DREAMER.md`   | 包含 SOUL.md 引用                     |
 | OpenClaw     | `CLAW.md`      | 包含 AGENT.md 引用                    |
+| Linkyun Infiniti Agent | `INFINITI.md` | 包含 SOUL.md 引用                |
 | 自研 Agent    | 启动时读取      | 程序化解析 AGENT.md                   |
 
 ### 文件结构示例
@@ -116,6 +124,14 @@ curl http://localhost:8000/agents/{agent_id}/setup
 ~/workspace/coder/
 ├── SOUL.md                 # Dreamfactory 身份文件（内容等同 AGENT.md）
 ├── DREAMER.md              # Dreamfactory 适配文件（引用 SOUL.md）
+└── ... (项目代码)
+```
+
+**Linkyun Infiniti Agent：**
+```
+~/workspace/coder/
+├── SOUL.md                 # Infiniti 身份文件（内容等同 AGENT.md）
+├── INFINITI.md             # Linkyun Infiniti 适配文件（引用 SOUL.md）
 └── ... (项目代码)
 ```
 
@@ -163,6 +179,23 @@ curl http://localhost:8000/agents/{agent_id}/setup
 4. 所有通信必须经过 Mail Broker，使用你的邮箱地址
 ```
 
+**INFINITI.md（Linkyun Infiniti Agent）：**
+
+```markdown
+# INFINITI.md
+
+请在启动时加载 SOUL.md 以获取你的身份和通信协议。
+
+@import SOUL.md
+
+## 行为指引
+
+1. 启动后先通过 Inbox API 检查是否有未读消息
+2. 按照 SOUL.md 中的身份提示词行事
+3. 完成任务后通过 Reply 或 Forward 将结果发送给下一个环节
+4. 所有通信必须经过 Mail Broker，使用你的邮箱地址
+```
+
 **CLAW.md（OpenClaw）：**
 
 ```markdown
@@ -193,6 +226,7 @@ cd agent-mailer && uv run python -m agent_mailer.main
 # 2. 注册 Agent
 CODER_ID=$(curl -s -X POST http://localhost:8000/agents/register \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: <your_api_key>" \
   -d '{
     "name": "coder",
     "role": "coder",
@@ -201,7 +235,7 @@ CODER_ID=$(curl -s -X POST http://localhost:8000/agents/register \
   }' | jq -r '.id')
 
 # 3. 获取配置
-SETUP=$(curl -s http://localhost:8000/agents/$CODER_ID/setup)
+SETUP=$(curl -s -H "X-API-Key: <your_api_key>" http://localhost:8000/agents/$CODER_ID/setup)
 
 # 4. 创建工作目录
 mkdir -p ~/workspace/coder
@@ -231,6 +265,16 @@ cd ~/workspace/coder && dreamfactory
 # Dreamfactory 加载 DREAMER.md -> 读取 SOUL.md -> 获取身份，开始查收邮件
 ```
 
+**Linkyun Infiniti Agent：**
+```bash
+# Infiniti 使用 SOUL.md 作为身份文件
+echo "$SETUP" | jq -r '.agent_md' > ~/workspace/coder/SOUL.md
+# 使用接口返回的 infiniti_md，或手动创建 INFINITI.md 适配文件
+echo "$SETUP" | jq -r '.infiniti_md' > ~/workspace/coder/INFINITI.md
+cd ~/workspace/coder && infiniti
+# Infiniti 加载 INFINITI.md -> 读取 SOUL.md -> 获取身份，开始查收邮件
+```
+
 **OpenClaw：**
 ```bash
 echo "$SETUP" | jq -r '.agent_md' > ~/workspace/coder/AGENT.md
@@ -250,7 +294,7 @@ cd ~/workspace/coder && openclaw
 
 - **`system_prompt` 是注册时的必填项**：它定义了 Agent 的核心行为，不同的身份提示词让同一个底层 LLM 扮演不同角色
 - **AGENT.md 是通用身份格式**：不绑定任何特定 Agent 实现，任何能读取 Markdown 的系统都可以解析
-- **适配文件是桥接层**：每种 Agent 类型都有自己的适配文件（CLAUDE.md / DREAMER.md / CLAW.md / .cursorrules），通过引用身份文件实现身份注入
-- **身份文件命名约定**：大多数 Agent 类型使用 `AGENT.md` 作为身份文件；Dreamfactory 使用 `SOUL.md`（内容格式相同，仅文件名不同）
+- **适配文件是桥接层**：每种 Agent 类型都有自己的适配文件（CLAUDE.md / DREAMER.md / INFINITI.md / CLAW.md / .cursorrules），通过引用身份文件实现身份注入
+- **身份文件命名约定**：大多数 Agent 类型使用 `AGENT.md` 作为身份文件；Dreamfactory 和 Linkyun Infiniti Agent 使用 `SOUL.md`（内容格式相同，仅文件名不同）
 - **一目录一身份**：不同工作目录对应不同 Agent 身份，同一个 Agent 在不同目录下自动切换角色
 - **Agent 类型无关**：Broker 不感知 Agent 的具体类型，注册和通信协议对所有类型一致

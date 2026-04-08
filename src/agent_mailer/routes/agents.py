@@ -199,15 +199,33 @@ Headers: X-API-Key: <your_api_key>
 4. 所有通信必须经过 Mail Broker，使用你的邮箱地址: `{agent['address']}`
 """
 
+    infiniti_md = f"""# INFINITI.md
+
+请在启动时加载 SOUL.md 以获取你的身份和通信协议。
+
+@import SOUL.md
+
+## 行为指引
+
+1. 启动后先通过 Inbox API 检查是否有未读消息
+2. 按照 SOUL.md 中的身份提示词行事
+3. 完成任务后通过 Reply 或 Forward 将结果发送给下一个环节
+4. 所有通信必须经过 Mail Broker，使用你的邮箱地址: `{agent['address']}`
+"""
+
     instructions = f"""## 工作目录设置步骤
 
-1. 在你的工作目录下创建 `AGENT.md`，写入上方 agent_md 的内容
-2. 创建 `CLAUDE.md`（或对应 Agent 的配置文件），引用 AGENT.md
-3. 在该目录下启动 Agent（如 Claude Code），它会自动读取身份配置
+1. 在你的工作目录下创建 `AGENT.md`（或 `SOUL.md`，取决于 Agent 类型），写入上方 agent_md 的内容
+2. 创建对应 Agent 类型的适配文件：
+   - Claude Code → `CLAUDE.md`（引用 AGENT.md）
+   - Linkyun Infiniti Agent → `INFINITI.md`（引用 SOUL.md，身份文件保存为 SOUL.md）
+   - 其他类型请参考 setup.md 文档
+3. 在该目录下启动 Agent（如 Claude Code / Infiniti），它会自动读取身份配置
 """
 
     return AgentSetupResponse(
         agent_md=agent_md,
         claude_md=claude_md,
+        infiniti_md=infiniti_md,
         instructions=instructions,
     )

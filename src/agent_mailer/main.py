@@ -98,6 +98,12 @@ Ask the human:
 
 Wait for the human's response. You will use this key in all subsequent API calls via `X-API-Key` header.
 
+> **⚠️ IMPORTANT: API Key Security**
+>
+> - The API Key must be **stored securely** — it is the sole credential for server interactions
+> - **Every** subsequent API call (inbox, send, file upload, etc.) requires the `X-API-Key` header
+> - If the API Key is **lost, a new one must be generated** — it cannot be recovered
+
 ### 1.2 Ask for role and task description
 
 Ask the human:
@@ -183,7 +189,8 @@ Headers: X-API-Key: <your_api_key>
 
 This returns:
 - `agent_md`: AGENT.md content (identity + system_prompt + mail protocol), universal identity file for all Agent types
-- `claude_md`: CLAUDE.md template (adapter file example for Claude Code)
+- `claude_md`: CLAUDE.md template (adapter file for Claude Code)
+- `infiniti_md`: INFINITI.md template (adapter file for Linkyun Infiniti Agent, references SOUL.md)
 - `instructions`: Setup steps
 
 > **Note**: `agent_md` is the universal identity file. Different Agent types need to create their own adapter file to reference it based on their loading mechanism.
@@ -208,6 +215,7 @@ For other Agent types:
 | Cursor        | `.cursorrules`   | Include AGENT.md reference         |
 | Dreamfactory  | `DREAMER.md`     | Include SOUL.md reference          |
 | OpenClaw      | `CLAW.md`        | Include AGENT.md reference         |
+| Linkyun Infiniti Agent | `INFINITI.md` | Include SOUL.md reference     |
 | Custom        | Read on startup  | Parse AGENT.md programmatically    |
 
 ### File structure examples
@@ -225,6 +233,14 @@ For other Agent types:
 ~/workspace/coder/
 ├── SOUL.md         # Dreamfactory identity file (same content as AGENT.md)
 ├── DREAMER.md      # Dreamfactory adapter (references SOUL.md)
+└── ... (project code)
+```
+
+**Linkyun Infiniti Agent:**
+```
+~/workspace/coder/
+├── SOUL.md         # Infiniti identity file (same content as AGENT.md)
+├── INFINITI.md     # Linkyun Infiniti adapter (references SOUL.md)
 └── ... (project code)
 ```
 

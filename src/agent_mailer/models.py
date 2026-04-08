@@ -43,6 +43,7 @@ class AgentUpdateTagsRequest(BaseModel):
 class AgentSetupResponse(BaseModel):
     agent_md: str
     claude_md: str
+    infiniti_md: str
     instructions: str
 
 
