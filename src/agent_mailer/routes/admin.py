@@ -9,12 +9,14 @@ from agent_mailer.dependencies import get_current_user
 from agent_mailer.routes.agents import _compute_status
 from agent_mailer.forward_body import build_forward_body
 from fastapi.responses import HTMLResponse
+import math
 from agent_mailer.models import (
     AdminSendRequest,
     AgentResponse,
     AgentStats,
     AgentUpdateTagsRequest,
     MessageResponse,
+    PaginatedInboxResponse,
     ThreadArchiveStatus,
     ThreadOperatorStatus,
     ThreadSummary,
@@ -477,8 +479,12 @@ async def purge_thread(thread_id: str, request: Request, user: dict = Depends(ge
     return {"ok": True, "thread_id": thread_id}
 
 
-@router.get("/messages/inbox/{address}", response_model=list[MessageResponse])
-async def admin_inbox(address: str, request: Request, all: bool = False, user: dict = Depends(get_current_user)):
+@router.get("/messages/inbox/{address}")
+async def admin_inbox(
+    address: str, request: Request, all: bool = False,
+    page: int | None = None, page_size: int = 20,
+    user: dict = Depends(get_current_user),
+):
     db = request.app.state.db
     # Verify address belongs to current user
     cursor = await db.execute("SELECT user_id FROM agents WHERE address = ?", (address,))
@@ -486,18 +492,36 @@ async def admin_inbox(address: str, request: Request, all: bool = False, user: d
     if not row or row["user_id"] != user["id"]:
         raise HTTPException(status_code=404, detail="Address not found")
     vis = INBOX_VISIBILITY_SQL
-    if all:
+    where = f"to_agent = ? AND {vis}" if all else f"to_agent = ? AND is_read = 0 AND {vis}"
+
+    if page is not None:
+        cursor = await db.execute(f"SELECT COUNT(*) AS cnt FROM messages WHERE {where}", (address,))
+        cnt_row = await cursor.fetchone()
+        total = cnt_row["cnt"] if cnt_row else 0
+        total_pages = max(1, math.ceil(total / page_size))
+        offset = (page - 1) * page_size
         cursor = await db.execute(
-            f"SELECT * FROM messages WHERE to_agent = ? AND {vis} ORDER BY created_at DESC",
-            (address,),
+            f"SELECT * FROM messages WHERE {where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (address, page_size, offset),
+        )
+        rows = await cursor.fetchall()
+        return PaginatedInboxResponse(
+            messages=[_row_to_response(row) for row in rows],
+            total=total, page=page, page_size=page_size, total_pages=total_pages,
         )
     else:
-        cursor = await db.execute(
-            f"SELECT * FROM messages WHERE to_agent = ? AND is_read = 0 AND {vis} ORDER BY created_at DESC",
-            (address,),
-        )
-    rows = await cursor.fetchall()
-    return [_row_to_response(row) for row in rows]
+        if all:
+            cursor = await db.execute(
+                f"SELECT * FROM messages WHERE to_agent = ? AND {vis} ORDER BY created_at DESC",
+                (address,),
+            )
+        else:
+            cursor = await db.execute(
+                f"SELECT * FROM messages WHERE to_agent = ? AND is_read = 0 AND {vis} ORDER BY created_at DESC",
+                (address,),
+            )
+        rows = await cursor.fetchall()
+        return [_row_to_response(row) for row in rows]
 
 
 @router.post("/messages/send", response_model=MessageResponse | list[MessageResponse])

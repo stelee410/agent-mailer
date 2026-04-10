@@ -230,5 +230,13 @@ class TeamDetailResponse(TeamResponse):
     agents: list[AgentResponse] = []
 
 
+class PaginatedInboxResponse(BaseModel):
+    messages: list[MessageResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
 class TeamAddAgentRequest(BaseModel):
     agent_id: str

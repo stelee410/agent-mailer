@@ -5,7 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from agent_mailer.db import INBOX_VISIBILITY_SQL
 from agent_mailer.dependencies import get_api_key_user
 from agent_mailer.forward_body import build_forward_body
-from agent_mailer.models import SendRequest, MessageResponse, render_body_html
+from agent_mailer.models import SendRequest, MessageResponse, PaginatedInboxResponse, render_body_html
+import math
 
 router = APIRouter()
 
@@ -132,10 +133,11 @@ async def send_message(
     return results
 
 
-@router.get("/messages/inbox/{address}", response_model=list[MessageResponse])
+@router.get("/messages/inbox/{address}")
 async def inbox(
     address: str, request: Request, agent_id: str = Query(...),
-    all: bool = False, user: dict = Depends(get_api_key_user),
+    all: bool = False, page: int | None = None, page_size: int = 20,
+    user: dict = Depends(get_api_key_user),
 ):
     db = request.app.state.db
 
@@ -151,18 +153,31 @@ async def inbox(
         pass
 
     vis = INBOX_VISIBILITY_SQL
-    if all:
+    where = f"to_agent = ? AND {vis}" if all else f"to_agent = ? AND is_read = 0 AND {vis}"
+
+    if page is not None:
+        # Paginated response
+        cursor = await db.execute(f"SELECT COUNT(*) AS cnt FROM messages WHERE {where}", (address,))
+        cnt_row = await cursor.fetchone()
+        total = cnt_row["cnt"] if cnt_row else 0
+        total_pages = max(1, math.ceil(total / page_size))
+        offset = (page - 1) * page_size
         cursor = await db.execute(
-            f"SELECT * FROM messages WHERE to_agent = ? AND {vis} ORDER BY created_at",
-            (address,),
+            f"SELECT * FROM messages WHERE {where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (address, page_size, offset),
+        )
+        rows = await cursor.fetchall()
+        return PaginatedInboxResponse(
+            messages=[_row_to_response(row) for row in rows],
+            total=total, page=page, page_size=page_size, total_pages=total_pages,
         )
     else:
+        # Backward compatible: return list
         cursor = await db.execute(
-            f"SELECT * FROM messages WHERE to_agent = ? AND is_read = 0 AND {vis} ORDER BY created_at",
-            (address,),
+            f"SELECT * FROM messages WHERE {where} ORDER BY created_at", (address,),
         )
-    rows = await cursor.fetchall()
-    return [_row_to_response(row) for row in rows]
+        rows = await cursor.fetchall()
+        return [_row_to_response(row) for row in rows]
 
 
 @router.get("/messages/thread/{thread_id}", response_model=list[MessageResponse])

@@ -143,10 +143,10 @@ async function showHumanInbox() {
   }
 }
 
-async function showInbox(address, agentId) {
+async function showInbox(address, agentId, page) {
   clearNav();
   setSidebarSpecialMode('none');
-  currentView = { type: 'inbox', address, agentId: agentId || null };
+  currentView = { type: 'inbox', address, agentId: agentId || null, page: page || 1 };
   document.getElementById('main').innerHTML = '';
   await refreshSidebar();
   await renderInbox();
@@ -164,10 +164,21 @@ async function renderInbox() {
   if (currentView?.type !== 'inbox') return;
   const address = currentView.address;
   const agentId = currentView.agentId;
-  const msgs = await fetchInbox(address);
+  const page = currentView.page || 1;
+  const data = await fetchInbox(address, page, 20);
   const main = document.getElementById('main');
 
+  const msgs = data.messages;
+  const { total, total_pages } = data;
+
   msgs.forEach(m => { msgCache[m.id] = m; });
+
+  const paginationHtml = total_pages > 1 ? `
+    <div class="pagination">
+      <button class="btn btn-secondary pagination-btn" ${page <= 1 ? 'disabled' : ''} onclick="showInbox('${esc(address)}', '${esc(agentId || '')}', ${page - 1})">&laquo; Prev</button>
+      <span class="pagination-info">Page ${page} / ${total_pages} (${total} messages)</span>
+      <button class="btn btn-secondary pagination-btn" ${page >= total_pages ? 'disabled' : ''} onclick="showInbox('${esc(address)}', '${esc(agentId || '')}', ${page + 1})">Next &raquo;</button>
+    </div>` : '';
 
   const existingList = main.querySelector('.msg-list');
   if (existingList) {
@@ -180,6 +191,8 @@ async function renderInbox() {
     } else if (msgs.length > 0 && emptyEl) {
       emptyEl.remove();
     }
+    const oldPag = main.querySelector('.pagination');
+    if (oldPag) oldPag.outerHTML = paginationHtml;
     hydrateMarkdownBodies(main);
     return;
   }
@@ -196,6 +209,7 @@ async function renderInbox() {
         ${msgs.map(m => renderMsgItem(m)).join('')}
       </ul>
       ${msgs.length === 0 ? '<div class="empty inbox-empty">No messages.</div>' : ''}
+      ${paginationHtml}
     </div>`;
   hydrateMarkdownBodies(main);
   hydrateTagInput();

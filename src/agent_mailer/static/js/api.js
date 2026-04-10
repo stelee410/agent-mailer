@@ -25,8 +25,10 @@ async function fetchAgents() {
   return agents;
 }
 
-async function fetchInbox(address) {
-  return api(`/admin/messages/inbox/${encodeURIComponent(address)}?all=true`);
+async function fetchInbox(address, page, pageSize) {
+  let url = `/admin/messages/inbox/${encodeURIComponent(address)}?all=true`;
+  if (page != null) url += `&page=${page}&page_size=${pageSize || 20}`;
+  return api(url);
 }
 
 async function fetchThread(threadId) {
