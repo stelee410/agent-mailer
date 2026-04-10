@@ -31,11 +31,18 @@ async function renderTeams() {
   await fetchTeams();
 
   const teamsHtml = teamsData.length === 0
-    ? '<div class="empty" style="padding:20px 0">No teams yet. Create one to get started.</div>'
+    ? `<div class="empty" style="padding:32px 0;text-align:center">
+        <p>No teams yet.</p>
+        <p class="team-empty-hint">Create a team to organize your agents into groups with isolated contact visibility.</p>
+        <button class="btn btn-primary" onclick="showCreateTeamForm()">+ Create Your First Team</button>
+      </div>`
     : `<div class="teams-grid">${teamsData.map(t => `
         <div class="team-card" onclick="showTeamDetail('${esc(t.id)}')">
+          <div class="team-card-icon">${t.agent_count > 0
+            ? `<span class="team-card-avatar-count">${t.agent_count}</span>`
+            : '<span class="team-card-avatar-empty">0</span>'}</div>
           <div class="team-card-name">${esc(t.name)}</div>
-          <div class="team-card-desc">${esc(t.description) || '<span style="color:var(--muted)">No description</span>'}</div>
+          <div class="team-card-desc">${esc(t.description) || '<span class="text-muted">No description</span>'}</div>
           <div class="team-card-footer">
             <span class="team-agent-count">${t.agent_count} agent${t.agent_count !== 1 ? 's' : ''}</span>
             <span class="team-card-time">${esc(fmtTime(t.created_at))}</span>
@@ -47,7 +54,7 @@ async function renderTeams() {
     <div class="card">
       <div class="card-header-row">
         <h2>Teams</h2>
-        <button class="btn btn-primary" onclick="showCreateTeamForm()">+ Create Team</button>
+        ${teamsData.length > 0 ? '<button class="btn btn-primary" onclick="showCreateTeamForm()">+ Create Team</button>' : ''}
       </div>
       ${teamsHtml}
     </div>`;
@@ -59,17 +66,19 @@ function showCreateTeamForm() {
     <div class="card">
       <button type="button" class="back-btn" onclick="showTeams()">&larr; Back to Teams</button>
       <h2>Create Team</h2>
-      <div class="team-form">
-        <div class="form-group">
-          <label for="teamName">Name</label>
-          <input type="text" id="teamName" placeholder="Enter team name" class="form-input">
+      <div class="compose-form">
+        <div>
+          <label for="teamName">Team Name</label>
+          <input type="text" id="teamName" placeholder="e.g. Frontend, Backend, DevOps...">
         </div>
-        <div class="form-group">
-          <label for="teamDesc">Description (optional)</label>
-          <input type="text" id="teamDesc" placeholder="Brief description" class="form-input">
+        <div>
+          <label for="teamDesc">Description</label>
+          <input type="text" id="teamDesc" placeholder="Brief description of this team's purpose (optional)">
         </div>
         <div id="teamFormError" class="login-error" style="display:none"></div>
-        <button class="btn btn-primary" id="createTeamBtn" onclick="doCreateTeam()">Create</button>
+        <div>
+          <button class="btn btn-primary" id="createTeamBtn" onclick="doCreateTeam()">Create Team</button>
+        </div>
       </div>
     </div>`;
 }
@@ -109,8 +118,9 @@ async function renderTeamDetail(teamId) {
   try {
     team = await fetchTeamDetail(teamId);
   } catch (e) {
-    main.innerHTML = `<div class="card"><p class="empty">Team not found.</p>
-      <button type="button" class="back-btn" onclick="showTeams()">&larr; Back to Teams</button></div>`;
+    main.innerHTML = `<div class="card">
+      <button type="button" class="back-btn" onclick="showTeams()">&larr; Back to Teams</button>
+      <p class="empty">Team not found.</p></div>`;
     return;
   }
 
@@ -118,44 +128,71 @@ async function renderTeamDetail(teamId) {
   const allAgents = await api('/admin/agents');
   const unassigned = allAgents.filter(a => !a.team_id && a.role !== 'operator');
 
+  // Members table
   const membersHtml = team.agents.length === 0
-    ? '<div class="empty" style="padding:12px 0">No agents in this team yet.</div>'
-    : `<div class="team-members-list">${team.agents.map(a => `
-        <div class="team-member-item">
-          <div class="agent-info">
-            <div class="agent-name"><span class="status-dot status-${a.status || 'offline'}"></span>${esc(a.name)}</div>
-            <div class="agent-role">${esc(a.role)} &middot; ${esc(a.address)}</div>
-          </div>
-          <button class="btn-sm btn-danger" onclick="removeAgentFromTeam('${esc(team.id)}', '${esc(a.id)}', '${esc(a.name)}')">&times; Remove</button>
-        </div>
-      `).join('')}</div>`;
-
-  const addAgentHtml = unassigned.length === 0
-    ? '<div class="empty" style="padding:8px 0;font-size:12px">All agents are assigned to teams.</div>'
-    : `<div class="team-add-agent-row">
-        <select id="addAgentSelect" class="form-input" style="flex:1">
-          <option value="">-- Select agent --</option>
-          ${unassigned.map(a => `<option value="${esc(a.id)}">${esc(a.name)} (${esc(a.role)})</option>`).join('')}
-        </select>
-        <button class="btn btn-primary btn-sm" onclick="addAgentToTeam('${esc(team.id)}')">Add</button>
+    ? '<div class="empty" style="padding:16px 0">暂无成员，请在下方添加 Agent</div>'
+    : `<div class="stats-table-wrap">
+        <table class="stats-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Role</th>
+              <th>Address</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${team.agents.map(a => `
+              <tr>
+                <td><strong>${esc(a.name)}</strong></td>
+                <td>${esc(a.role)}</td>
+                <td class="text-muted">${esc(a.address)}</td>
+                <td><span class="status-dot status-${a.status || 'offline'}" title="${a.status === 'online' ? '在线' : a.status === 'idle' ? '空闲' : '离线'}"></span> ${a.status || 'offline'}</td>
+                <td><button class="btn-danger-sm" onclick="removeAgentFromTeam('${esc(team.id)}', '${esc(a.id)}', '${esc(a.name)}')">Remove</button></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
       </div>`;
+
+  // Add agent section
+  let addAgentHtml;
+  if (unassigned.length === 0) {
+    addAgentHtml = '<div class="empty" style="padding:12px 0;font-size:12px">All agents are already assigned to teams. Create new agents or remove existing ones from other teams first.</div>';
+  } else {
+    addAgentHtml = `
+      <p class="team-section-hint">Select an unassigned agent to add to this team. Each agent can only belong to one team.</p>
+      <div class="compose-form">
+        <div>
+          <label for="addAgentSelect">Agent</label>
+          <select id="addAgentSelect">
+            <option value="">-- Select an agent to add --</option>
+            ${unassigned.map(a => `<option value="${esc(a.id)}">${esc(a.name)} (${esc(a.role)}) — ${esc(a.address)}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <button class="btn btn-primary" onclick="addAgentToTeam('${esc(team.id)}')">Add to Team</button>
+        </div>
+      </div>`;
+  }
 
   main.innerHTML = `
     <div class="card">
       <button type="button" class="back-btn" onclick="showTeams()">&larr; Back to Teams</button>
       <div class="card-header-row">
         <div>
-          <h2 id="teamDetailName">${esc(team.name)}</h2>
-          <p class="team-detail-desc" id="teamDetailDesc">${esc(team.description) || '<span style="color:var(--muted)">No description</span>'}</p>
+          <h2>${esc(team.name)}</h2>
+          <p class="team-detail-desc">${esc(team.description) || '<span class="text-muted">No description</span>'}</p>
         </div>
         <div class="team-detail-actions">
-          <button class="btn btn-secondary btn-sm" onclick="showEditTeamForm('${esc(team.id)}')">Edit</button>
-          <button class="btn btn-sm" style="background:var(--danger);color:#fff" onclick="deleteTeam('${esc(team.id)}', '${esc(team.name)}')">Delete</button>
+          <button class="btn btn-secondary" onclick="showEditTeamForm('${esc(team.id)}')">Edit</button>
+          <button class="btn btn-danger" onclick="deleteTeam('${esc(team.id)}', '${esc(team.name)}')">Delete</button>
         </div>
       </div>
-      <h3 style="margin-top:20px;margin-bottom:8px">Members (${team.agents.length})</h3>
+      <h3 class="team-section-header">团队成员 (${team.agents.length})</h3>
       ${membersHtml}
-      <h3 style="margin-top:20px;margin-bottom:8px">Add Agent</h3>
+      <h3 class="team-section-header">添加成员</h3>
       ${addAgentHtml}
     </div>`;
 }
@@ -171,17 +208,19 @@ async function showEditTeamForm(teamId) {
     <div class="card">
       <button type="button" class="back-btn" onclick="showTeamDetail('${esc(teamId)}')">&larr; Back</button>
       <h2>Edit Team</h2>
-      <div class="team-form">
-        <div class="form-group">
-          <label for="editTeamName">Name</label>
-          <input type="text" id="editTeamName" value="${esc(team.name)}" class="form-input">
+      <div class="compose-form">
+        <div>
+          <label for="editTeamName">Team Name</label>
+          <input type="text" id="editTeamName" value="${esc(team.name)}">
         </div>
-        <div class="form-group">
+        <div>
           <label for="editTeamDesc">Description</label>
-          <input type="text" id="editTeamDesc" value="${esc(team.description)}" class="form-input">
+          <input type="text" id="editTeamDesc" value="${esc(team.description)}" placeholder="Brief description of this team's purpose (optional)">
         </div>
         <div id="editTeamError" class="login-error" style="display:none"></div>
-        <button class="btn btn-primary" onclick="doUpdateTeam('${esc(teamId)}')">Save</button>
+        <div>
+          <button class="btn btn-primary" onclick="doUpdateTeam('${esc(teamId)}')">Save Changes</button>
+        </div>
       </div>
     </div>`;
 }
