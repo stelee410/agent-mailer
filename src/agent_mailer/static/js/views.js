@@ -51,26 +51,55 @@ async function showThreadsThread(threadId) {
   main.innerHTML = '<div class="card"><p>Loading...</p></div>';
   try {
     const msgs = await fetchThread(threadId);
-    main.innerHTML = `
-      <div class="card">
-        <button type="button" class="back-btn" onclick="showThreads()">&larr; Back to Threads</button>
-        <h2>Thread</h2>
-        ${msgs.map(m => `
-          <div class="thread-msg">
-            <div class="thread-meta">
-              <strong>${esc(m.from_agent)}</strong> &rarr; ${esc(m.to_agent)}
-              <span class="msg-action-tag ${m.action}">${m.action}</span>
-              <span style="margin-left:8px;color:var(--muted)">${esc(fmtTime(m.created_at))}</span>
-            </div>
-            ${m.subject ? `<div class="thread-subject-line${humanSubjectClass(m.from_agent)}">${esc(m.subject)}</div>` : ''}
-            <div class="thread-body markdown-body" data-md-html="${mdDataAttr(m.body_html)}"></div>
-          </div>
-        `).join('')}
-      </div>`;
+    main.innerHTML = _renderThreadDetail(msgs, threadId, 'showThreads()');
     hydrateMarkdownBodies(main);
   } catch (e) {
-    main.innerHTML = `<div class="card"><button type="button" class="back-btn" onclick="showThreads()">&larr; Back to Threads</button><p class="empty">Error: ${esc(e.message)}</p></div>`;
+    main.innerHTML = `<div class="card"><button type="button" class="back-btn" onclick="showThreads()">&larr; Back</button><p class="empty">Error: ${esc(e.message)}</p></div>`;
   }
+}
+
+function _renderThreadDetail(msgs, threadId, backFn) {
+  const lastMsg = msgs[msgs.length - 1];
+  return `
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+        <button type="button" class="back-btn" onclick="${backFn}">&larr; Back</button>
+        <div class="thread-actions" style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-secondary" onclick="showCompose('${esc(lastMsg.from_agent)}', 'Re: ${esc(lastMsg.subject)}', '${esc(lastMsg.id)}', null, null, {mode:'reply'})">Reply</button>
+          <button class="btn btn-secondary" onclick="showCompose('', 'Fwd: ${esc(lastMsg.subject)}', '${esc(lastMsg.id)}', null, null, {mode:'forward'})">Forward</button>
+          <button class="btn btn-secondary" onclick="archiveThreadAction('${esc(threadId)}', '${esc(backFn)}')">Archive</button>
+          <button class="btn btn-danger" onclick="trashThreadAction('${esc(threadId)}', '${esc(backFn)}')">Delete</button>
+        </div>
+      </div>
+      <h2>Thread</h2>
+      ${msgs.map(m => `
+        <div class="thread-msg">
+          <div class="thread-meta">
+            <strong>${esc(m.from_agent)}</strong> &rarr; ${esc(m.to_agent)}
+            <span class="msg-action-tag ${m.action}">${m.action}</span>
+            <span style="margin-left:8px;color:var(--muted)">${esc(fmtTime(m.created_at))}</span>
+          </div>
+          ${m.subject ? `<div class="thread-subject-line${humanSubjectClass(m.from_agent)}">${esc(m.subject)}</div>` : ''}
+          <div class="thread-body markdown-body" data-md-html="${mdDataAttr(m.body_html)}"></div>
+        </div>
+      `).join('')}
+    </div>`;
+}
+
+async function archiveThreadAction(threadId, backFn) {
+  if (!await showConfirm('Archive Thread', 'Archive this thread?', 'Archive')) return;
+  try {
+    await api(`/admin/threads/${encodeURIComponent(threadId)}/archive`, { method: 'POST' });
+    eval(backFn);
+  } catch (e) { alert(e.message); }
+}
+
+async function trashThreadAction(threadId, backFn) {
+  if (!await showConfirm('Delete Thread', 'Move this thread to trash?', 'Delete')) return;
+  try {
+    await api(`/admin/threads/${encodeURIComponent(threadId)}/trash`, { method: 'POST' });
+    eval(backFn);
+  } catch (e) { alert(e.message); }
 }
 
 // --- Archive & Trash views ---
@@ -194,25 +223,10 @@ async function showTrashThread(threadId) {
   main.innerHTML = '<div class="card"><p>Loading...</p></div>';
   try {
     const msgs = await fetchThread(threadId);
-    main.innerHTML = `
-      <div class="card">
-        <button type="button" class="back-btn" onclick="showTrash()">&larr; Back to Trash</button>
-        <h2>Thread</h2>
-        ${msgs.map(m => `
-          <div class="thread-msg">
-            <div class="thread-meta">
-              <strong>${esc(m.from_agent)}</strong> &rarr; ${esc(m.to_agent)}
-              <span class="msg-action-tag ${m.action}">${m.action}</span>
-              <span style="margin-left:8px;color:var(--muted)">${esc(fmtTime(m.created_at))}</span>
-            </div>
-            ${m.subject ? `<div class="thread-subject-line${humanSubjectClass(m.from_agent)}">${esc(m.subject)}</div>` : ''}
-            <div class="thread-body markdown-body" data-md-html="${mdDataAttr(m.body_html)}"></div>
-          </div>
-        `).join('')}
-      </div>`;
+    main.innerHTML = _renderThreadDetail(msgs, threadId, 'showTrash()');
     hydrateMarkdownBodies(main);
   } catch (e) {
-    main.innerHTML = `<div class="card"><button type="button" class="back-btn" onclick="showTrash()">&larr; Back to Trash</button><p class="empty">Error: ${esc(e.message)}</p></div>`;
+    main.innerHTML = `<div class="card"><button type="button" class="back-btn" onclick="showTrash()">&larr; Back</button><p class="empty">Error: ${esc(e.message)}</p></div>`;
   }
 }
 
@@ -227,25 +241,10 @@ async function showArchiveThread(threadId) {
   main.innerHTML = '<div class="card"><p>Loading...</p></div>';
   try {
     const msgs = await fetchThread(threadId);
-    main.innerHTML = `
-      <div class="card">
-        <button type="button" class="back-btn" onclick="showArchive()">&larr; Back to Archive</button>
-        <h2>Thread</h2>
-        ${msgs.map(m => `
-          <div class="thread-msg">
-            <div class="thread-meta">
-              <strong>${esc(m.from_agent)}</strong> &rarr; ${esc(m.to_agent)}
-              <span class="msg-action-tag ${m.action}">${m.action}</span>
-              <span style="margin-left:8px;color:var(--muted)">${esc(fmtTime(m.created_at))}</span>
-            </div>
-            ${m.subject ? `<div class="thread-subject-line${humanSubjectClass(m.from_agent)}">${esc(m.subject)}</div>` : ''}
-            <div class="thread-body markdown-body" data-md-html="${mdDataAttr(m.body_html)}"></div>
-          </div>
-        `).join('')}
-      </div>`;
+    main.innerHTML = _renderThreadDetail(msgs, threadId, 'showArchive()');
     hydrateMarkdownBodies(main);
   } catch (e) {
-    main.innerHTML = `<div class="card"><button type="button" class="back-btn" onclick="showArchive()">&larr; Back to Archive</button><p class="empty">Error: ${esc(e.message)}</p></div>`;
+    main.innerHTML = `<div class="card"><button type="button" class="back-btn" onclick="showArchive()">&larr; Back</button><p class="empty">Error: ${esc(e.message)}</p></div>`;
   }
 }
 
