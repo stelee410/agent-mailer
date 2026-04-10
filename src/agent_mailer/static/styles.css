@@ -449,3 +449,15 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); heig
 .team-section-header { margin-top: 24px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); font-size: 14px; font-weight: 600; color: var(--text-dim); font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.5px; }
 .team-section-hint { font-size: 12px; color: var(--muted); margin-bottom: 12px; line-height: 1.5; }
 .sidebar-team-tag { background: var(--primary-light); color: var(--accent-bright); font-size: 10px; padding: 1px 6px; border-radius: 8px; font-weight: 500; }
+
+/* Sidebar By Teams mode */
+.sidebar-team-group { border-bottom: 1px solid var(--border-subtle); }
+.sidebar-team-header { display: flex; align-items: center; gap: 6px; padding: 10px 16px; cursor: pointer; background: var(--sidebar-bg); font-size: 12px; font-weight: 600; color: var(--text-dim); transition: background 0.15s; user-select: none; }
+.sidebar-team-header:hover { background: var(--sidebar-hover); }
+.sidebar-team-arrow { display: inline-block; width: 10px; font-size: 10px; transition: transform 0.15s; color: var(--muted); }
+.sidebar-team-arrow::before { content: '\25BC'; }
+.sidebar-team-group.collapsed .sidebar-team-arrow { transform: rotate(-90deg); }
+.sidebar-team-group.collapsed .sidebar-team-agents { display: none; }
+.sidebar-team-header-name { flex: 1; }
+.sidebar-team-header-count { color: var(--muted); font-weight: 400; font-size: 11px; }
+.sidebar-agent-indented { padding-left: 32px; }

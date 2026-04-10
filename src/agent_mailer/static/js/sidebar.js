@@ -1,5 +1,18 @@
 // --- Sidebar ---
 
+function _renderSidebarAgent(a, activeAddr, indented) {
+  const indent = indented ? ' sidebar-agent-indented' : '';
+  return `
+    <div class="agent-item${indent} ${a.address === activeAddr ? 'active' : ''}"
+         onclick='showInbox(${JSON.stringify(a.address)}, ${JSON.stringify(a.agent_id || a.id)})'>
+      <div class="agent-info">
+        <div class="agent-name"><span class="status-dot status-${a.status || 'offline'}" title="${a.status === 'online' ? '在线' : a.status === 'idle' ? '空闲' : '离线'}"></span>${esc(a.name)}</div>
+        <div class="agent-role">${esc(a.role)} &middot; ${esc(a.address)}</div>
+      </div>
+      <span class="badge ${(a.messages_unread || 0) === 0 ? 'zero' : ''}">${a.messages_unread || 0}</span>
+    </div>`;
+}
+
 /** @param {'none'|'archive'|'trash'} mode */
 function setSidebarSpecialMode(mode) {
   const sel = document.getElementById('sidebarModeSelect');
@@ -103,6 +116,73 @@ async function refreshSidebar() {
       <span class="badge ${t.unread_count === 0 ? 'zero' : ''}">${t.unread_count}</span>
     </div>
   `).join('');
+    return;
+  }
+
+  if (sidebarMode === 'teams') {
+    updateFilterVisibility();
+    await fetchStats();
+    await fetchTeams();
+    // Fetch team details for member lists
+    const teamDetails = [];
+    for (const t of teamsData) {
+      try { teamDetails.push(await fetchTeamDetail(t.id)); } catch {}
+    }
+    const agentsList = await fetchAgents();
+    const activeAddr = currentView?.type === 'inbox' ? currentView.address : null;
+
+    // Build stats lookup for unread counts
+    const statsMap = {};
+    for (const s of statsData) statsMap[s.address] = s;
+
+    // Human operator first
+    const opAgent = statsData.find(a => a.address === HUMAN_OPERATOR_ADDRESS);
+    let html = '';
+    if (opAgent) {
+      html += _renderSidebarAgent(opAgent, activeAddr);
+    }
+
+    // Render each team
+    for (const team of teamDetails) {
+      const collapsed = document.querySelector(`.sidebar-team-group[data-team-id="${team.id}"]`)?.classList.contains('collapsed') || false;
+      html += `<div class="sidebar-team-group${collapsed ? ' collapsed' : ''}" data-team-id="${team.id}">
+        <div class="sidebar-team-header" onclick="this.parentElement.classList.toggle('collapsed')">
+          <span class="sidebar-team-arrow"></span>
+          <span class="sidebar-team-header-name">${esc(team.name)}</span>
+          <span class="sidebar-team-header-count">(${team.agents.length})</span>
+        </div>
+        <div class="sidebar-team-agents">
+          ${team.agents.length === 0
+            ? '<div class="empty" style="padding:6px 16px 8px 32px;font-size:11px">No agents</div>'
+            : team.agents.map(a => {
+                const s = statsMap[a.address] || a;
+                return _renderSidebarAgent({ ...s, ...a, agent_id: a.id, messages_unread: s.messages_unread || 0 }, activeAddr, true);
+              }).join('')}
+        </div>
+      </div>`;
+    }
+
+    // Unassigned agents
+    const assignedIds = new Set();
+    for (const t of teamDetails) for (const a of t.agents) assignedIds.add(a.id);
+    const unassigned = agentsList.filter(a => !assignedIds.has(a.id) && a.address !== HUMAN_OPERATOR_ADDRESS && a.role !== 'operator');
+    if (unassigned.length > 0) {
+      html += `<div class="sidebar-team-group" data-team-id="__unassigned">
+        <div class="sidebar-team-header" onclick="this.parentElement.classList.toggle('collapsed')">
+          <span class="sidebar-team-arrow"></span>
+          <span class="sidebar-team-header-name">Unassigned</span>
+          <span class="sidebar-team-header-count">(${unassigned.length})</span>
+        </div>
+        <div class="sidebar-team-agents">
+          ${unassigned.map(a => {
+            const s = statsMap[a.address] || a;
+            return _renderSidebarAgent({ ...s, ...a, agent_id: a.id, messages_unread: s.messages_unread || 0 }, activeAddr, true);
+          }).join('')}
+        </div>
+      </div>`;
+    }
+
+    list.innerHTML = html || '<div class="empty" style="padding:20px 16px;font-size:12px">No agents yet.</div>';
     return;
   }
 
