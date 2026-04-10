@@ -404,6 +404,13 @@ async def init_db(db):
         await _add_column_if_missing(db, "agents", "last_seen", "TEXT")
         await _add_column_if_missing(db, "users", "filter_tags", "TEXT NOT NULL DEFAULT '[]'")
         await _add_column_if_missing(db, "agents", "team_id", "TEXT REFERENCES teams(id) ON DELETE SET NULL")
+        # pg_trgm extension + GIN indexes for full-text search
+        try:
+            await db.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_messages_subject_trgm ON messages USING GIN (subject gin_trgm_ops)")
+            await db.execute("CREATE INDEX IF NOT EXISTS idx_messages_body_trgm ON messages USING GIN (body gin_trgm_ops)")
+        except Exception:
+            pass  # pg_trgm may not be available
     else:
         await db.executescript(SCHEMA)
         await db.executescript(ARCHIVED_THREADS_SCHEMA)
