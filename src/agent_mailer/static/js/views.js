@@ -94,14 +94,29 @@ async function showThreadsThread(threadId) {
   }
 }
 
+let _lastThreadMsg = null;
+
+function _replyToThread() {
+  if (!_lastThreadMsg) return;
+  const m = _lastThreadMsg;
+  showCompose(m.from_agent, 'Re: ' + m.subject, m.id, m.body, m.body_html, {mode:'reply'});
+}
+
+function _forwardFromThread() {
+  if (!_lastThreadMsg) return;
+  const m = _lastThreadMsg;
+  showCompose('', 'Fwd: ' + m.subject, m.id, null, null, {mode:'forward'});
+}
+
 function _renderThreadDetail(msgs, threadId, backFn, context) {
   context = context || 'threads';
   const lastMsg = msgs[msgs.length - 1];
+  _lastThreadMsg = lastMsg;
   let actionsHtml = '';
   if (context === 'threads') {
     actionsHtml = `
-      <button class="btn btn-secondary" onclick="showCompose('${esc(lastMsg.from_agent)}', 'Re: ${esc(lastMsg.subject)}', '${esc(lastMsg.id)}', ${JSON.stringify(lastMsg.body)}, ${JSON.stringify(lastMsg.body_html)}, {mode:'reply'})">Reply</button>
-      <button class="btn btn-secondary" onclick="showCompose('', 'Fwd: ${esc(lastMsg.subject)}', '${esc(lastMsg.id)}', null, null, {mode:'forward'})">Forward</button>
+      <button class="btn btn-secondary" onclick="_replyToThread()">Reply</button>
+      <button class="btn btn-secondary" onclick="_forwardFromThread()">Forward</button>
       <button class="btn btn-secondary" onclick="archiveThreadAction('${esc(threadId)}', '${esc(backFn)}')">Archive</button>
       <button class="btn btn-danger" onclick="trashThreadAction('${esc(threadId)}', '${esc(backFn)}')">Delete</button>`;
   } else if (context === 'archive') {
