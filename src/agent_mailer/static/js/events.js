@@ -8,8 +8,6 @@ function startPolling() {
     if (currentView?.type === 'stats') await renderStats();
     if (currentView?.type === 'thread') await renderThreadView();
     if (currentView?.type === 'trashedMessage') await renderTrashedMessageView();
-    if (currentView?.type === 'teams') await renderTeams();
-    if (currentView?.type === 'teamDetail') await renderTeams();
   }, pollInterval);
 }
 
