@@ -415,8 +415,9 @@ async def archive_thread(thread_id: str, request: Request, user: dict = Depends(
     if await cursor.fetchone():
         raise HTTPException(status_code=400, detail="Thread is in trash; restore it before archiving.")
     now = datetime.now(timezone.utc).isoformat()
+    await db.execute("DELETE FROM archived_threads WHERE thread_id = ?", (thread_id,))
     await db.execute(
-        "INSERT OR REPLACE INTO archived_threads (thread_id, archived_at) VALUES (?, ?)",
+        "INSERT INTO archived_threads (thread_id, archived_at) VALUES (?, ?)",
         (thread_id, now),
     )
     await db.commit()
@@ -442,8 +443,9 @@ async def trash_thread(thread_id: str, request: Request, user: dict = Depends(ge
     now = datetime.now(timezone.utc).isoformat()
     await db.execute("DELETE FROM archived_threads WHERE thread_id = ?", (thread_id,))
     await _clear_trashed_messages_for_thread(db, thread_id)
+    await db.execute("DELETE FROM trashed_threads WHERE thread_id = ?", (thread_id,))
     await db.execute(
-        "INSERT OR REPLACE INTO trashed_threads (thread_id, trashed_at) VALUES (?, ?)",
+        "INSERT INTO trashed_threads (thread_id, trashed_at) VALUES (?, ?)",
         (thread_id, now),
     )
     await db.commit()

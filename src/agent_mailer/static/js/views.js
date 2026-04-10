@@ -3,29 +3,99 @@
 async function showArchive() {
   clearNav();
   document.getElementById('navArchive').classList.add('active');
-  setSidebarSpecialMode('archive');
+  setSidebarSpecialMode('none');
   currentView = { type: 'archive' };
-  document.getElementById('main').innerHTML =
-    '<div class="empty">Select an archived thread from the sidebar.</div>';
-  await refreshSidebar();
+  await renderArchiveMain();
+}
+
+async function renderArchiveMain() {
+  if (currentView?.type !== 'archive') return;
+  await fetchThreadsSummary({ archived: true });
+  const main = document.getElementById('main');
+  if (threadsData.length === 0) {
+    main.innerHTML = '<div class="card"><h2>Archive</h2><div class="empty">No archived threads.</div></div>';
+    return;
+  }
+  main.innerHTML = `
+    <div class="card">
+      <h2>Archive</h2>
+      <div class="stats-table-wrap">
+      <table class="stats-table">
+        <thead><tr><th>Subject</th><th>Messages</th><th>Unread</th><th>Last Activity</th></tr></thead>
+        <tbody>${threadsData.map(t => `
+          <tr style="cursor:pointer" onclick="showThreadFromSidebar('${esc(t.thread_id)}', 'archive')">
+            <td><strong>${esc(t.preview_subject) || '(no subject)'}</strong></td>
+            <td class="stat-num">${t.message_count}</td>
+            <td class="stat-num">${t.unread_count}</td>
+            <td style="color:var(--muted)">${esc(fmtTime(t.last_activity))}</td>
+          </tr>
+        `).join('')}</tbody>
+      </table>
+      </div>
+    </div>`;
 }
 
 async function showTrash() {
   clearNav();
   document.getElementById('navTrash').classList.add('active');
-  setSidebarSpecialMode('trash');
+  setSidebarSpecialMode('none');
   currentView = { type: 'trash' };
-  document.getElementById('main').innerHTML =
-    '<div class="empty">Select a deleted thread or message from the sidebar.</div>';
-  await refreshSidebar();
+  await renderTrashMain();
+}
+
+async function renderTrashMain() {
+  if (currentView?.type !== 'trash') return;
+  await fetchThreadsSummary({ trashed: true });
+  await fetchTrashedMessages();
+  const main = document.getElementById('main');
+  if (threadsData.length === 0 && trashedMessagesData.length === 0) {
+    main.innerHTML = '<div class="card"><h2>Trash</h2><div class="empty">Trash is empty.</div></div>';
+    return;
+  }
+  const threadsHtml = threadsData.length === 0
+    ? '<div class="empty" style="padding:12px 0">No threads in trash.</div>'
+    : `<div class="stats-table-wrap">
+      <table class="stats-table">
+        <thead><tr><th>Subject</th><th>Messages</th><th>Unread</th><th>Trashed At</th></tr></thead>
+        <tbody>${threadsData.map(t => `
+          <tr style="cursor:pointer" onclick="showThreadFromSidebar('${esc(t.thread_id)}', 'trash')">
+            <td><strong>${esc(t.preview_subject) || '(no subject)'}</strong></td>
+            <td class="stat-num">${t.message_count}</td>
+            <td class="stat-num">${t.unread_count}</td>
+            <td style="color:var(--muted)">${esc(fmtTime(t.trashed_at || t.last_activity))}</td>
+          </tr>
+        `).join('')}</tbody>
+      </table>
+      </div>`;
+  const msgsHtml = trashedMessagesData.length === 0
+    ? '<div class="empty" style="padding:12px 0">No individual messages in trash.</div>'
+    : `<div class="stats-table-wrap">
+      <table class="stats-table">
+        <thead><tr><th>Subject</th><th>From</th><th>Trashed At</th></tr></thead>
+        <tbody>${trashedMessagesData.map(tm => `
+          <tr style="cursor:pointer" onclick="showTrashedMessageFromTrash('${esc(tm.message_id)}')">
+            <td><strong>${esc(tm.subject) || '(no subject)'}</strong></td>
+            <td style="color:var(--muted)">${esc(tm.from_agent)}</td>
+            <td style="color:var(--muted)">${esc(fmtTime(tm.trashed_at))}</td>
+          </tr>
+        `).join('')}</tbody>
+      </table>
+      </div>`;
+  main.innerHTML = `
+    <div class="card">
+      <h2>Trash</h2>
+      <h3 class="team-section-header">Trashed Threads</h3>
+      ${threadsHtml}
+      <h3 class="team-section-header">Trashed Messages</h3>
+      ${msgsHtml}
+    </div>`;
 }
 
 async function showTrashedMessageFromTrash(messageId) {
   clearNav();
   document.getElementById('navTrash').classList.add('active');
-  setSidebarSpecialMode('trash');
+  setSidebarSpecialMode('none');
   currentView = { type: 'trashedMessage', messageId };
-  await refreshSidebar();
   await renderTrashedMessageView();
 }
 
@@ -103,6 +173,7 @@ async function renderTrashedMessageView() {
 }
 
 async function trashSingleMessage(messageId, opts = {}) {
+  if (!await showConfirm('Move to Trash', 'Move this message to trash?', 'Move to Trash')) return;
   try {
     await api(`/admin/messages/${encodeURIComponent(messageId)}/trash`, { method: 'POST' });
     if (opts.fromInbox && expandedMsg === messageId) expandedMsg = null;
