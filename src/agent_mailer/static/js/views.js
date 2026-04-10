@@ -1,3 +1,78 @@
+// --- Threads view ---
+
+async function showThreads() {
+  clearNav();
+  document.getElementById('navThreads').classList.add('active');
+  setSidebarSpecialMode('none');
+  currentView = { type: 'threads' };
+  document.getElementById('main').innerHTML = '<div class="card"><h2>Threads</h2><p>Loading...</p></div>';
+  try {
+    await renderThreadsMain();
+  } catch (e) {
+    document.getElementById('main').innerHTML = '<div class="card"><h2>Threads</h2><p class="empty">Error: ' + (e.message || e) + '</p></div>';
+  }
+}
+
+async function renderThreadsMain() {
+  if (currentView?.type !== 'threads') return;
+  const main = document.getElementById('main');
+  try {
+    await fetchThreadsSummary({});
+  } catch (e) {
+    main.innerHTML = '<div class="card"><h2>Threads</h2><p class="empty">Failed to load: ' + esc(e.message) + '</p></div>';
+    return;
+  }
+  if (threadsData.length === 0) {
+    main.innerHTML = '<div class="card"><h2>Threads</h2><p class="empty" style="padding:24px 0;text-align:center">No threads yet.</p></div>';
+    return;
+  }
+  main.innerHTML = `
+    <div class="card">
+      <h2>Threads</h2>
+      <div class="stats-table-wrap">
+      <table class="stats-table">
+        <thead><tr><th>Subject</th><th>Messages</th><th>Unread</th><th>Last Activity</th></tr></thead>
+        <tbody>${threadsData.map(t => `
+          <tr style="cursor:pointer" onclick="showThreadsThread('${esc(t.thread_id)}')">
+            <td><strong>${esc(t.preview_subject) || '(no subject)'}</strong></td>
+            <td class="stat-num">${t.message_count}</td>
+            <td class="stat-num" style="color:${t.unread_count > 0 ? 'var(--danger)' : 'inherit'};font-weight:${t.unread_count > 0 ? '600' : 'normal'}">${t.unread_count}</td>
+            <td style="color:var(--muted)">${esc(fmtTime(t.last_activity))}</td>
+          </tr>
+        `).join('')}</tbody>
+      </table>
+      </div>
+    </div>`;
+}
+
+async function showThreadsThread(threadId) {
+  currentView = { type: 'threadsThread', threadId };
+  const main = document.getElementById('main');
+  main.innerHTML = '<div class="card"><p>Loading...</p></div>';
+  try {
+    const msgs = await fetchThread(threadId);
+    main.innerHTML = `
+      <div class="card">
+        <button type="button" class="back-btn" onclick="showThreads()">&larr; Back to Threads</button>
+        <h2>Thread</h2>
+        ${msgs.map(m => `
+          <div class="thread-msg">
+            <div class="thread-meta">
+              <strong>${esc(m.from_agent)}</strong> &rarr; ${esc(m.to_agent)}
+              <span class="msg-action-tag ${m.action}">${m.action}</span>
+              <span style="margin-left:8px;color:var(--muted)">${esc(fmtTime(m.created_at))}</span>
+            </div>
+            ${m.subject ? `<div class="thread-subject-line${humanSubjectClass(m.from_agent)}">${esc(m.subject)}</div>` : ''}
+            <div class="thread-body markdown-body" data-md-html="${mdDataAttr(m.body_html)}"></div>
+          </div>
+        `).join('')}
+      </div>`;
+    hydrateMarkdownBodies(main);
+  } catch (e) {
+    main.innerHTML = `<div class="card"><button type="button" class="back-btn" onclick="showThreads()">&larr; Back to Threads</button><p class="empty">Error: ${esc(e.message)}</p></div>`;
+  }
+}
+
 // --- Archive & Trash views ---
 
 async function showArchive() {
