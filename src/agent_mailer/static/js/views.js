@@ -1,3 +1,20 @@
+// --- Image preview ---
+
+function previewImage(url, filename) {
+  const overlay = document.createElement('div');
+  overlay.className = 'image-preview-overlay';
+  overlay.innerHTML = `
+    <div class="image-preview-box">
+      <div class="image-preview-header">
+        <span>${esc(filename)}</span>
+        <button class="compose-modal-close" onclick="this.closest('.image-preview-overlay').remove()">&times;</button>
+      </div>
+      <img src="${esc(url)}" class="image-preview-img" alt="${esc(filename)}">
+    </div>`;
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
+
 // --- Threads view ---
 
 async function showThreads() {
@@ -784,6 +801,7 @@ function closeComposeModal() {
 
 // --- Compose upload state ---
 let composeUploadedFiles = [];
+let pasteImageCounter = 0;
 
 function renderComposeAttachments() {
   const container = document.getElementById('composeAttachments');
@@ -791,7 +809,7 @@ function renderComposeAttachments() {
   if (composeUploadedFiles.length === 0) { container.innerHTML = ''; return; }
   container.innerHTML = composeUploadedFiles.map((f, i) => `
     <div class="compose-attachment-item">
-      <img src="${esc(f.url)}" class="compose-attachment-thumb" alt="${esc(f.filename)}">
+      <img src="${esc(f.url)}" class="compose-attachment-thumb" alt="${esc(f.filename)}" onclick="previewImage('${esc(f.url)}', '${esc(f.filename)}')" style="cursor:pointer" title="Click to preview">
       <div class="compose-attachment-info">
         <span class="compose-attachment-name">${esc(f.filename)}</span>
         <span class="compose-attachment-size">${(f.size / 1024).toFixed(1)} KB</span>
@@ -838,6 +856,7 @@ async function uploadFile(file) {
 
 function hydrateComposeUpload() {
   composeUploadedFiles = [];
+  pasteImageCounter = 0;
   const zone = document.getElementById('composeUploadZone');
   const fileInput = document.getElementById('composeFileInput');
   if (!zone || !fileInput) return;
@@ -871,7 +890,12 @@ function hydrateComposeUpload() {
       if (item.type.startsWith('image/')) {
         e.preventDefault();
         const file = item.getAsFile();
-        if (file) uploadFile(file);
+        if (file) {
+          pasteImageCounter++;
+          const ext = file.type.split('/')[1] || 'png';
+          const renamed = new File([file], `image${pasteImageCounter}.${ext}`, { type: file.type });
+          uploadFile(renamed);
+        }
       }
     }
   };

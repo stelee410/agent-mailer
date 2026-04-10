@@ -468,6 +468,12 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); heig
 .compose-modal-close { position: absolute; top: 12px; right: 12px; background: none; border: none; color: var(--text-dim); font-size: 24px; cursor: pointer; padding: 4px 8px; border-radius: 4px; z-index: 1; }
 .compose-modal-close:hover { color: var(--text); background: var(--sidebar-hover); }
 
+/* Image preview */
+.image-preview-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 2000; display: flex; align-items: center; justify-content: center; }
+.image-preview-box { max-width: 90vw; max-height: 90vh; position: relative; }
+.image-preview-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; color: var(--text-dim); font-size: 12px; }
+.image-preview-img { max-width: 90vw; max-height: 80vh; border-radius: 8px; display: block; }
+
 /* Pagination */
 .pagination { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 16px 0 4px; border-top: 1px solid var(--border-subtle); margin-top: 12px; }
 .pagination-info { font-size: 12px; color: var(--text-dim); font-family: var(--mono); }
