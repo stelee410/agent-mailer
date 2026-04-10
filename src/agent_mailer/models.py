@@ -1,7 +1,7 @@
 from typing import Literal
 
 import markdown as _md
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 ForwardScope = Literal["message", "thread"]
 
@@ -208,7 +208,7 @@ class LoginResponse(BaseModel):
 
 
 class TeamCreateRequest(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=64)
     description: str = ""
 
 
