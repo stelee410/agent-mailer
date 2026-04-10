@@ -35,6 +35,7 @@ def _parse_agent(row) -> dict:
     d["tags"] = json.loads(raw) if isinstance(raw, str) else raw
     d["last_seen"] = d.get("last_seen")
     d["status"] = _compute_status(d["last_seen"], d.get("role"))
+    d["team_id"] = d.get("team_id")
     return d
 
 
@@ -118,11 +119,38 @@ async def update_address(
 
 
 @router.get("/agents", response_model=list[AgentResponse])
-async def list_agents(request: Request, user: dict = Depends(get_api_key_user)):
+async def list_agents(request: Request, agent_id: str | None = None, user: dict = Depends(get_api_key_user)):
     db = request.app.state.db
-    cursor = await db.execute(
-        "SELECT * FROM agents WHERE user_id = ? ORDER BY created_at", (user["id"],)
-    )
+
+    if agent_id:
+        # Team-based visibility filtering
+        cursor = await db.execute(
+            "SELECT team_id FROM agents WHERE id = ? AND user_id = ?", (agent_id, user["id"])
+        )
+        agent_row = await cursor.fetchone()
+        if not agent_row:
+            raise HTTPException(status_code=404, detail="Agent not found")
+
+        requester_team_id = agent_row["team_id"]
+
+        if requester_team_id:
+            # Return same-team agents + human operators
+            cursor = await db.execute(
+                "SELECT * FROM agents WHERE user_id = ? AND (team_id = ? OR role = 'operator') ORDER BY created_at",
+                (user["id"], requester_team_id),
+            )
+        else:
+            # Ungrouped: return other ungrouped agents + human operators
+            cursor = await db.execute(
+                "SELECT * FROM agents WHERE user_id = ? AND (team_id IS NULL OR role = 'operator') ORDER BY created_at",
+                (user["id"],),
+            )
+    else:
+        # No agent_id — return all (admin/backward compat)
+        cursor = await db.execute(
+            "SELECT * FROM agents WHERE user_id = ? ORDER BY created_at", (user["id"],)
+        )
+
     rows = await cursor.fetchall()
     return [AgentResponse(**_parse_agent(row)) for row in rows]
 

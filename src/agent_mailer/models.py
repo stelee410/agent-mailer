@@ -32,6 +32,7 @@ class AgentResponse(BaseModel):
     created_at: str
     last_seen: str | None = None
     status: str = "offline"
+    team_id: str | None = None
 
 
 class AgentUpdateAddressRequest(BaseModel):
@@ -201,3 +202,33 @@ class InviteCodeResponse(BaseModel):
 class LoginResponse(BaseModel):
     token: str
     user: UserResponse
+
+
+# --- Team models ---
+
+
+class TeamCreateRequest(BaseModel):
+    name: str
+    description: str = ""
+
+
+class TeamUpdateRequest(BaseModel):
+    name: str | None = None
+    description: str | None = None
+
+
+class TeamResponse(BaseModel):
+    id: str
+    name: str
+    description: str
+    user_id: str
+    created_at: str
+    agent_count: int = 0
+
+
+class TeamDetailResponse(TeamResponse):
+    agents: list[AgentResponse] = []
+
+
+class TeamAddAgentRequest(BaseModel):
+    agent_id: str

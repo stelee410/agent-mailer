@@ -99,6 +99,16 @@ PG_SCHEMA = [
         created_at TEXT NOT NULL
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS teams (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        user_id TEXT NOT NULL REFERENCES users(id),
+        created_at TEXT NOT NULL,
+        UNIQUE(name, user_id)
+    )
+    """,
 ]
 
 # SQLite-only legacy schema (for CREATE TABLE IF NOT EXISTS + additive migrations)
@@ -194,6 +204,17 @@ CREATE TABLE IF NOT EXISTS files (
     stored_path TEXT NOT NULL,
     user_id TEXT NOT NULL,
     created_at TEXT NOT NULL
+);
+"""
+
+TEAMS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS teams (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    user_id TEXT NOT NULL REFERENCES users(id),
+    created_at TEXT NOT NULL,
+    UNIQUE(name, user_id)
 );
 """
 
@@ -382,6 +403,7 @@ async def init_db(db):
         await _add_column_if_missing(db, "agents", "user_id", "TEXT")
         await _add_column_if_missing(db, "agents", "last_seen", "TEXT")
         await _add_column_if_missing(db, "users", "filter_tags", "TEXT NOT NULL DEFAULT '[]'")
+        await _add_column_if_missing(db, "agents", "team_id", "TEXT REFERENCES teams(id) ON DELETE SET NULL")
     else:
         await db.executescript(SCHEMA)
         await db.executescript(ARCHIVED_THREADS_SCHEMA)
@@ -391,8 +413,10 @@ async def init_db(db):
         await db.executescript(INVITE_CODES_SCHEMA)
         await db.executescript(API_KEYS_SCHEMA)
         await db.executescript(FILES_SCHEMA)
+        await db.executescript(TEAMS_SCHEMA)
         await _add_column_if_missing(db, "agents", "tags", "TEXT NOT NULL DEFAULT '[]'")
         await _add_column_if_missing(db, "agents", "user_id", "TEXT")
         await _add_column_if_missing(db, "agents", "last_seen", "TEXT")
         await _add_column_if_missing(db, "users", "filter_tags", "TEXT NOT NULL DEFAULT '[]'")
+        await _add_column_if_missing(db, "agents", "team_id", "TEXT REFERENCES teams(id) ON DELETE SET NULL")
     await db.commit()

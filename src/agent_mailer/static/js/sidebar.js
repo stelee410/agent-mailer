@@ -107,6 +107,17 @@ async function refreshSidebar() {
   }
 
   await fetchStats();
+  // Build team name lookup for sidebar tags
+  let teamNameMap = {};
+  let agentTeamMap = {};
+  try {
+    if (typeof fetchTeams === 'function') {
+      await fetchTeams();
+      for (const t of teamsData) teamNameMap[t.id] = t.name;
+    }
+    const agentsList = await fetchAgents();
+    for (const a of agentsList) if (a.team_id) agentTeamMap[a.address] = a.team_id;
+  } catch {}
   updateFilterVisibility();
   const activeAddr = currentView?.type === 'inbox' ? currentView.address : null;
   const filtered = filterTags.size > 0
@@ -124,11 +135,15 @@ async function refreshSidebar() {
     const tagsHtml = (a.tags || []).length > 0
       ? `<div class="sidebar-tags">${a.tags.map(t => `<span class="sidebar-tag">${esc(t)}</span>`).join('')}</div>`
       : '';
+    const teamId = agentTeamMap[a.address];
+    const teamTag = teamId && teamNameMap[teamId]
+      ? ` <span class="sidebar-team-tag">${esc(teamNameMap[teamId])}</span>`
+      : '';
     return `
     <div class="agent-item ${a.address === activeAddr ? 'active' : ''}"
          onclick='showInbox(${JSON.stringify(a.address)}, ${JSON.stringify(a.agent_id)})'>
       <div class="agent-info">
-        <div class="agent-name"><span class="status-dot status-${a.status || 'offline'}" title="${a.status === 'online' ? '在线' : a.status === 'idle' ? '空闲' : '离线'}"></span>${esc(a.name)}</div>
+        <div class="agent-name"><span class="status-dot status-${a.status || 'offline'}" title="${a.status === 'online' ? '在线' : a.status === 'idle' ? '空闲' : '离线'}"></span>${esc(a.name)}${teamTag}</div>
         <div class="agent-role">${esc(a.role)} &middot; ${esc(a.address)}</div>
         ${tagsHtml}
       </div>

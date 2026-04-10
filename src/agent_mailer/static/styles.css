@@ -427,3 +427,27 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); heig
   .compose-form textarea { font-size: 16px; }
   .login-box { margin: 16px; padding: 28px 20px; }
 }
+
+/* Teams */
+.card-header-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.teams-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.team-card { background: var(--sidebar-hover); border: 1px solid var(--border); border-radius: 8px; padding: 16px; cursor: pointer; transition: border-color 0.2s, background 0.2s; }
+.team-card:hover { border-color: var(--primary); background: var(--sidebar-active); }
+.team-card-name { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+.team-card-desc { font-size: 12px; color: var(--text-dim); margin-bottom: 12px; min-height: 18px; }
+.team-card-footer { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--muted); }
+.team-agent-count { background: var(--primary-light); color: var(--accent-bright); padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
+.team-form { max-width: 400px; display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+.form-group { display: flex; flex-direction: column; gap: 4px; }
+.form-group label { font-size: 12px; color: var(--text-dim); font-weight: 500; }
+.form-input { background: var(--sidebar-hover); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; font-size: 14px; font-family: var(--sans); }
+.form-input:focus { outline: none; border-color: var(--primary); }
+.btn-sm { font-size: 12px; padding: 4px 12px; border-radius: 4px; border: none; cursor: pointer; font-family: var(--sans); }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-danger:hover { opacity: 0.85; }
+.team-detail-desc { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+.team-detail-actions { display: flex; gap: 8px; }
+.team-members-list { display: flex; flex-direction: column; gap: 8px; }
+.team-member-item { display: flex; align-items: center; justify-content: space-between; background: var(--sidebar-hover); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
+.team-add-agent-row { display: flex; gap: 8px; align-items: center; }
+.sidebar-team-tag { background: var(--primary-light); color: var(--accent-bright); font-size: 10px; padding: 1px 6px; border-radius: 8px; font-weight: 500; }
