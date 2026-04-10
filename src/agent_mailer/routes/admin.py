@@ -321,8 +321,8 @@ def _threads_summary_sql(*, archived: bool, trashed: bool, user_filter: bool = F
     user_join = ""
     user_where = ""
     if user_filter:
-        user_join = "INNER JOIN agents a ON (a.address = m.from_agent OR a.address = m.to_agent)"
-        user_where = "AND a.user_id = ?"
+        user_join = ""
+        user_where = "AND EXISTS (SELECT 1 FROM agents a WHERE a.user_id = ? AND (a.address = m.from_agent OR a.address = m.to_agent))"
 
     return f"""
         SELECT
@@ -606,9 +606,10 @@ async def list_trashed_messages(request: Request, user: dict = Depends(get_curre
             m.created_at AS created_at
         FROM trashed_messages tm
         INNER JOIN messages m ON m.id = tm.message_id
-        INNER JOIN agents a ON (a.address = m.from_agent OR a.address = m.to_agent)
-        WHERE a.user_id = ?
-        GROUP BY m.id
+        WHERE EXISTS (
+            SELECT 1 FROM agents a
+            WHERE a.user_id = ? AND (a.address = m.from_agent OR a.address = m.to_agent)
+        )
         ORDER BY tm.trashed_at DESC
         """,
         (user["id"],),
