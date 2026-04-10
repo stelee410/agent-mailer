@@ -10,9 +10,12 @@ from agent_mailer.routes.agents import _compute_status
 from agent_mailer.forward_body import build_forward_body
 from fastapi.responses import HTMLResponse
 import math
+from agent_mailer.db import _get_database_url
 from agent_mailer.models import (
     AdminSendRequest,
     AgentResponse,
+    SearchResponse,
+    SearchResultItem,
     AgentStats,
     AgentUpdateTagsRequest,
     MessageResponse,
@@ -692,6 +695,68 @@ async def purge_single_message(message_id: str, request: Request, user: dict = D
     await db.execute("DELETE FROM messages WHERE id = ?", (message_id,))
     await db.commit()
     return {"ok": True, "message_id": message_id}
+
+
+@router.get("/search", response_model=SearchResponse)
+async def admin_search(
+    request: Request, q: str = Query(..., min_length=1),
+    page: int = Query(default=1, ge=1), page_size: int = Query(default=20, ge=1, le=100),
+    user: dict = Depends(get_current_user),
+):
+    db = request.app.state.db
+    is_pg = _get_database_url() is not None
+    like_op = "ILIKE" if is_pg else "LIKE"
+    pattern = f"%{q}%"
+
+    where = f"""
+        (m.subject {like_op} ? OR m.body {like_op} ?)
+        AND EXISTS (SELECT 1 FROM agents a WHERE a.user_id = ? AND (a.address = m.from_agent OR a.address = m.to_agent))
+    """
+    params = (pattern, pattern, user["id"])
+
+    cursor = await db.execute(f"SELECT COUNT(*) AS cnt FROM messages m WHERE {where}", params)
+    cnt_row = await cursor.fetchone()
+    total = cnt_row["cnt"] if cnt_row else 0
+    total_pages = max(1, math.ceil(total / page_size))
+    offset = (page - 1) * page_size
+
+    cursor = await db.execute(
+        f"SELECT m.id, m.thread_id, m.subject, m.body, m.from_agent, m.to_agent, m.created_at FROM messages m WHERE {where} ORDER BY m.created_at DESC LIMIT ? OFFSET ?",
+        (*params, page_size, offset),
+    )
+    rows = await cursor.fetchall()
+
+    def snippet(body, query, length=100):
+        lower_body = body.lower()
+        idx = lower_body.find(query.lower())
+        if idx == -1:
+            return body[:200] if len(body) > 200 else body
+        start = max(0, idx - length)
+        end = min(len(body), idx + len(query) + length)
+        s = body[start:end]
+        if start > 0:
+            s = "..." + s
+        if end < len(body):
+            s = s + "..."
+        return s
+
+    results = []
+    for row in rows:
+        d = dict(row)
+        results.append(SearchResultItem(
+            message_id=d["id"],
+            thread_id=d["thread_id"],
+            subject=d["subject"],
+            body_snippet=snippet(d["body"], q),
+            from_agent=d["from_agent"],
+            to_agent=d["to_agent"],
+            created_at=d["created_at"],
+        ))
+
+    return SearchResponse(
+        messages=results, total=total, page=page,
+        page_size=page_size, total_pages=total_pages, query=q,
+    )
 
 
 @router.get("/ui", response_class=HTMLResponse)

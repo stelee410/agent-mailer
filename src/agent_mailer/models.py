@@ -230,6 +230,25 @@ class TeamDetailResponse(TeamResponse):
     agents: list[AgentResponse] = []
 
 
+class SearchResultItem(BaseModel):
+    message_id: str
+    thread_id: str
+    subject: str
+    body_snippet: str
+    from_agent: str
+    to_agent: str
+    created_at: str
+
+
+class SearchResponse(BaseModel):
+    messages: list[SearchResultItem]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+    query: str
+
+
 class PaginatedInboxResponse(BaseModel):
     messages: list[MessageResponse]
     total: int

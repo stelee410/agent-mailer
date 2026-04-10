@@ -15,6 +15,97 @@ function _paginationHtml(page, totalPages, total, onClickFn) {
   </div>`;
 }
 
+// --- Search ---
+
+async function showSearch(query, page) {
+  clearNav();
+  document.getElementById('navSearch').classList.add('active');
+  setSidebarSpecialMode('none');
+  currentView = { type: 'search', query: query || '', page: page || 1 };
+  if (query) {
+    location.hash = `search?q=${encodeURIComponent(query)}`;
+  }
+  renderSearchPage();
+  if (query) await doSearch();
+}
+
+function renderSearchPage() {
+  const main = document.getElementById('main');
+  const q = currentView.query || '';
+  main.innerHTML = `
+    <div class="card">
+      <h2>Search</h2>
+      <div class="compose-form">
+        <div>
+          <label>Keyword</label>
+          <input type="text" id="searchInput" placeholder="Search messages by subject or body..." value="${esc(q)}">
+        </div>
+        <div>
+          <button class="btn btn-primary" onclick="doSearch()">Search</button>
+        </div>
+      </div>
+      <div id="searchResults"></div>
+    </div>`;
+  document.getElementById('searchInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') doSearch();
+  });
+}
+
+async function doSearch(page) {
+  const input = document.getElementById('searchInput');
+  const q = input ? input.value.trim() : '';
+  if (!q) return;
+  page = page || 1;
+  currentView.query = q;
+  currentView.page = page;
+  location.hash = `search?q=${encodeURIComponent(q)}`;
+  const results = document.getElementById('searchResults');
+  results.innerHTML = '<p>Searching...</p>';
+  try {
+    const data = await api(`/admin/search?q=${encodeURIComponent(q)}&page=${page}&page_size=20`);
+    if (data.messages.length === 0) {
+      results.innerHTML = '<p class="empty" style="padding:16px 0">No results found.</p>';
+      return;
+    }
+    const highlightSnippet = (text, query) => {
+      const re = new RegExp('(' + query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+      return esc(text).replace(re, '<mark>$1</mark>');
+    };
+    results.innerHTML = `
+      <div class="stats-table-wrap" style="margin-top:16px">
+      <table class="stats-table">
+        <thead><tr><th>Subject</th><th>Snippet</th><th>From</th><th>Date</th></tr></thead>
+        <tbody>${data.messages.map(m => `
+          <tr style="cursor:pointer" onclick="showThreadsThread('${esc(m.thread_id)}')">
+            <td><strong>${esc(m.subject) || '(no subject)'}</strong></td>
+            <td style="font-size:12px;max-width:300px;overflow:hidden;text-overflow:ellipsis">${highlightSnippet(m.body_snippet, q)}</td>
+            <td style="color:var(--muted)">${esc(m.from_agent)}</td>
+            <td style="color:var(--muted)">${esc(fmtTime(m.created_at))}</td>
+          </tr>
+        `).join('')}</tbody>
+      </table>
+      </div>
+      ${data.total_pages > 1 ? `<div class="pagination">
+        <button class="btn btn-secondary pagination-btn" ${page <= 1 ? 'disabled' : ''} onclick="doSearch(${page - 1})">&laquo; Prev</button>
+        <span class="pagination-info">Page ${data.page} / ${data.total_pages} (${data.total} results)</span>
+        <button class="btn btn-secondary pagination-btn" ${page >= data.total_pages ? 'disabled' : ''} onclick="doSearch(${page + 1})">Next &raquo;</button>
+      </div>` : ''}`;
+  } catch (e) {
+    results.innerHTML = '<p class="empty">Error: ' + esc(e.message) + '</p>';
+  }
+}
+
+// Handle URL hash for search persistence
+window.addEventListener('hashchange', () => {
+  const hash = location.hash;
+  if (hash.startsWith('#search?q=')) {
+    const q = decodeURIComponent(hash.substring('#search?q='.length));
+    if (currentView?.type !== 'search' || currentView.query !== q) {
+      showSearch(q);
+    }
+  }
+});
+
 // --- Image preview ---
 
 function previewImage(url, filename) {
