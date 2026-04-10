@@ -428,6 +428,8 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); heig
   .compose-form input:not([type="radio"]):not([type="checkbox"]),
   .compose-form textarea { font-size: 16px; }
   .login-box { margin: 16px; padding: 28px 20px; }
+  .compose-modal-box { width: 96%; height: 96vh; padding: 16px; }
+  .compose-modal-box input, .compose-modal-box textarea, .compose-modal-box select { font-size: 16px !important; }
 }
 
 /* Teams */
