@@ -442,7 +442,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); heig
   }
   .nav-btn { flex: 1; text-align: center; font-size: 0; padding: 8px 2px; border-radius: 0; flex-direction: column; gap: 0; justify-content: center; }
   .nav-icon { width: 18px; height: 18px; min-width: 18px; min-height: 18px; max-width: 18px; max-height: 18px; }
-  .nav-toggle { display: none; }
+  .nav-toggle { display: flex; }
   .main { padding-bottom: 48px; }
   .agent-list { padding-bottom: 0; }
   .agent-delete-btn { opacity: 0.6; font-size: 20px; padding: 6px 10px; }
