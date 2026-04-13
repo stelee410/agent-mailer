@@ -92,10 +92,6 @@ document.getElementById('navButtons').addEventListener('click', () => {
 
 // --- Init ---
 (async () => {
-  // Auto-collapse nav-buttons on mobile
-  if (isMobile()) {
-    document.getElementById('navButtons').classList.add('collapsed');
-  }
   const authed = await checkAuth();
   if (!authed) return;
   await refreshSidebar();
