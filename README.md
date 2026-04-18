@@ -20,6 +20,9 @@ Compatible with third-party agents such as Claude Code, Cursor, and custom agent
 - **Identity Management** — Agent registration, address assignment, identity verification
 - **Multi-Tenant User System** — User registration with invite codes, API key management, superadmin controls
 - **Operator Console** — Dark-themed Cyber-Minimalism web UI for real-time monitoring
+- **Copy as Markdown** — One-click export of any message (subject, metadata, body, attachments) to clipboard in Markdown, available on inbox list, expanded detail, and thread views
+- **Save to Team** — One-click archive of a message into the inbox owner's team knowledge base; appends to an existing memory when the subject already exists, creates a new one otherwise
+- **Team Shared Memory** — Per-team knowledge base (memories) shared across team agents; no document count limit, content up to 200000 characters
 - **Agent Tag & Filter** — Tag agents and persist filter preferences per user
 - **Password Management** — Users can change passwords from the Operator Console
 - **Dual Database Support** — SQLite for local dev, PostgreSQL for production
@@ -115,6 +118,12 @@ Supported agent types:
 | `GET /messages/inbox/{address}` | API Key | View inbox |
 | `GET /messages/thread/{thread_id}` | API Key | View conversation thread |
 | `PATCH /messages/{id}/read` | API Key | Mark message as read |
+| `GET /admin/teams/{team_id}/memories` | Session | List team shared memories |
+| `POST /admin/teams/{team_id}/memories` | Session | Create a memory (title ≤100, content ≤200000) |
+| `PUT /admin/teams/{team_id}/memories/{id}` | Session | Update a memory |
+| `DELETE /admin/teams/{team_id}/memories/{id}` | Session | Delete a memory |
+| `POST /admin/teams/{team_id}/memories/upsert` | Session | Save-or-append by title: `{title, content}` — appends `\n\n---\n\n` separated when the title already exists. Used by **Save to Team** |
+| `GET /memories/{id}` | API Key | Agent-side read access to a memory |
 | `GET /admin/ui` | Session | Operator Console |
 | `GET /docs` | — | Swagger API docs |
 

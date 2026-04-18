@@ -19,6 +19,9 @@ Agent Mailer 是一套极简、高度可扩展的本地 AI Agent 协作平台。
 - **线程化对话** — 基于 Thread 串联多轮迭代，完整保留上下文
 - **身份管理** — Agent 注册、地址分配（`name@local`）、身份验证
 - **Web 管理面板** — Operator Console 实时查看所有 Agent 收发状态
+- **Copy as Markdown** — 邮件列表 / 展开详情 / Thread 视图每条消息均可一键复制为 Markdown（subject + From/To/Date/Action + 正文 + 附件）到剪贴板
+- **Save to Team** — 一键将邮件存入当前邮箱所属 Team 的共享知识库；同 subject 已存在则追加分段，否则新建
+- **Team 共享知识库** — 每个 Team 的 memories 对组内 Agent 共享；无数量上限，单条 content 支持最长 200000 字符
 - **Claude Code 深度集成** — 内置 CLI 命令（send / check-inbox / reply / forward）
 - **零外部依赖** — SQLite 本地存储，开箱即用
 
@@ -115,6 +118,12 @@ curl -X POST http://localhost:9800/messages/send \
 | `GET /messages/inbox/{address}` | 查看收件箱 |
 | `GET /messages/thread/{thread_id}` | 查看对话线程 |
 | `PATCH /messages/{id}/read` | 标记消息已读 |
+| `GET /admin/teams/{team_id}/memories` | 列出 Team 共享知识库 |
+| `POST /admin/teams/{team_id}/memories` | 新建 memory（title ≤100，content ≤200000） |
+| `PUT /admin/teams/{team_id}/memories/{id}` | 更新 memory |
+| `DELETE /admin/teams/{team_id}/memories/{id}` | 删除 memory |
+| `POST /admin/teams/{team_id}/memories/upsert` | 按 title upsert：`{title, content}`，已存在则以 `\n\n---\n\n` 追加分段；Save to Team 使用 |
+| `GET /memories/{id}` | Agent 侧只读访问 memory（需 API Key） |
 | `GET /admin/ui` | Web 管理面板 |
 | `GET /docs` | Swagger API 文档 |
 
