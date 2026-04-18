@@ -70,6 +70,14 @@ async function updateTeamMemory(teamId, memoryId, data) {
   });
 }
 
+async function upsertTeamMemory(teamId, data) {
+  return api(`/admin/teams/${encodeURIComponent(teamId)}/memories/upsert`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
 async function deleteTeamMemory(teamId, memoryId) {
   return api(`/admin/teams/${encodeURIComponent(teamId)}/memories/${encodeURIComponent(memoryId)}`, {
     method: 'DELETE',

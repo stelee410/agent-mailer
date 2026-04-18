@@ -266,12 +266,17 @@ class TeamAddAgentRequest(BaseModel):
 
 class MemoryCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=100)
-    content: str = Field(max_length=1500)
+    content: str = Field(max_length=200000)
 
 
 class MemoryUpdateRequest(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=100)
-    content: str | None = Field(default=None, max_length=1500)
+    content: str | None = Field(default=None, max_length=200000)
+
+
+class MemoryUpsertRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=100)
+    content: str = Field(max_length=200000)
 
 
 class MemoryResponse(BaseModel):

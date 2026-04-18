@@ -157,6 +157,53 @@ async function copyMessageAsMarkdown(msgId, ev) {
   showToast('自动复制失败，已打开手动复制窗口', 'error');
 }
 
+// --- Save message to team knowledge base ---
+function resolveTeamForMessage(m) {
+  // Prefer the inbox owner's team (derived from currentView), fall back to
+  // the message's to/from agents if we're in a thread view without inbox context.
+  if (typeof agents === 'undefined' || !Array.isArray(agents)) return null;
+  const byAddress = addr => agents.find(a => a && a.address === addr);
+  const byId = id => agents.find(a => a && a.id === id);
+
+  const candidates = [];
+  if (typeof currentView !== 'undefined' && currentView) {
+    if (currentView.agentId) candidates.push(byId(currentView.agentId));
+    if (currentView.address) candidates.push(byAddress(currentView.address));
+  }
+  if (m) {
+    candidates.push(byAddress(m.to_agent));
+    candidates.push(byAddress(m.from_agent));
+  }
+  for (const a of candidates) {
+    if (a && a.team_id) return a.team_id;
+  }
+  return null;
+}
+
+async function saveMessageToTeam(msgId, ev) {
+  if (ev && ev.stopPropagation) ev.stopPropagation();
+  const m = (typeof msgCache !== 'undefined') ? msgCache[msgId] : null;
+  if (!m) {
+    showToast('未找到邮件内容', 'error');
+    return;
+  }
+  const teamId = resolveTeamForMessage(m);
+  if (!teamId) {
+    showToast('当前邮箱未加入任何 Team，无法保存到知识库', 'error');
+    return;
+  }
+  const title = (m.subject && String(m.subject).trim()) || '(no subject)';
+  const content = buildMessageMarkdown(m);
+  try {
+    const res = await upsertTeamMemory(teamId, { title, content });
+    showToast('已保存到 Team 知识库', 'success');
+    return res;
+  } catch (e) {
+    const msg = (e && e.message) ? e.message : '保存失败';
+    showToast('保存失败：' + msg, 'error');
+  }
+}
+
 // --- Confirm modal ---
 function showConfirm(title, body, confirmLabel) {
   return new Promise(resolve => {

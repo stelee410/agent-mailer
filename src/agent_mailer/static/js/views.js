@@ -638,7 +638,8 @@ function renderMsgItem(m) {
           <span>
             <span class="msg-action-tag ${m.action}">${m.action}</span>
             <span class="msg-time">${fmtTime(m.created_at)}</span>
-            ${!isExpanded ? `<span class="thread-link msg-item-copy" title="以 Markdown 格式复制本条邮件" onclick="copyMessageAsMarkdown('${m.id}', event)">Copy as Markdown</span>` : ''}
+            ${!isExpanded ? `<span class="thread-link msg-item-copy" title="以 Markdown 格式复制本条邮件" onclick="copyMessageAsMarkdown('${m.id}', event)">Copy as Markdown</span>
+            <span class="thread-link msg-item-copy" title="保存邮件到所属 Team 的共享知识库" onclick="saveMessageToTeam('${m.id}', event)">Save to Team</span>` : ''}
           </span>
         </div>
         ${!isExpanded ? `
@@ -664,6 +665,7 @@ function renderMsgDetail(m) {
         <span class="thread-link" onclick="replyToMsg('${m.id}', event)">Reply</span>
         <span class="thread-link" onclick="forwardToMsg('${m.id}', event)">Forward</span>
         <span class="thread-link" title="以 Markdown 格式复制本条邮件" onclick="copyMessageAsMarkdown('${m.id}', event)">Copy as Markdown</span>
+        <span class="thread-link" title="保存邮件到所属 Team 的共享知识库" onclick="saveMessageToTeam('${m.id}', event)">Save to Team</span>
         ${m.is_read ? `<span class="thread-link" onclick="markMsgUnread('${m.id}', event)">Mark as unread</span>` : ''}
         <button type="button" class="btn btn-secondary msg-trash-action" style="font-size:12px;padding:4px 10px"
           onclick="event.stopPropagation(); trashSingleMessage('${m.id}', { fromInbox: true })">Move message to trash</button>
@@ -787,6 +789,7 @@ async function renderThreadView() {
             <span class="thread-link" onclick="replyToMsg('${m.id}', event)">Reply</span>
             <span class="thread-link" onclick="forwardToMsg('${m.id}', event)">Forward</span>
             <span class="thread-link" title="以 Markdown 格式复制本条邮件" onclick="copyMessageAsMarkdown('${m.id}', event)">Copy as Markdown</span>
+            <span class="thread-link" title="保存邮件到所属 Team 的共享知识库" onclick="saveMessageToTeam('${m.id}', event)">Save to Team</span>
             ${m.is_read ? `<span class="thread-link" onclick="markMsgUnread('${m.id}', event)">Mark as unread</span>` : ''}
             <button type="button" class="btn btn-secondary" style="font-size:12px;padding:4px 10px" onclick="trashSingleMessage('${m.id}', { fromThread: true })">Move message to trash</button>
           </div>` : ''}

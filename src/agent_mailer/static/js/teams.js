@@ -184,7 +184,6 @@ async function renderTeamDetail(teamId) {
     memories = await fetchTeamMemories(teamId);
   } catch (e) { /* ignore */ }
 
-  const memoriesAtLimit = memories.length >= 5;
   const memoriesListHtml = memories.length === 0
     ? '<div class="empty" style="padding:12px 0">No shared memories yet.</div>'
     : memories.map(m => `
@@ -203,8 +202,8 @@ async function renderTeamDetail(teamId) {
               <input type="text" id="memoryTitle-${esc(m.id)}" value="${esc(m.title)}" maxlength="100">
             </div>
             <div>
-              <label>Content <span class="memory-char-count" id="memoryCount-${esc(m.id)}">${(m.content || '').length}/1500</span></label>
-              <textarea id="memoryContent-${esc(m.id)}" maxlength="1500" oninput="updateMemoryCharCount('${esc(m.id)}')">${esc(m.content)}</textarea>
+              <label>Content <span class="memory-char-count" id="memoryCount-${esc(m.id)}">${(m.content || '').length}/200000</span></label>
+              <textarea id="memoryContent-${esc(m.id)}" maxlength="200000" oninput="updateMemoryCharCount('${esc(m.id)}')">${esc(m.content)}</textarea>
             </div>
             <div class="memory-url-row">
               <span class="text-muted" style="font-size:11px">URL: ${location.origin}/memories/${esc(m.id)}</span>
@@ -218,9 +217,7 @@ async function renderTeamDetail(teamId) {
         </div>
       `).join('');
 
-  const addMemoryBtnHtml = memoriesAtLimit
-    ? '<div class="text-muted" style="font-size:12px;padding:8px 0">Maximum of 5 memories reached.</div>'
-    : '<button class="btn btn-primary" onclick="toggleAddMemoryForm()" id="addMemoryBtn">+ Add Memory</button>';
+  const addMemoryBtnHtml = '<button class="btn btn-primary" onclick="toggleAddMemoryForm()" id="addMemoryBtn">+ Add Memory</button>';
 
   const addMemoryFormHtml = `
     <div id="addMemoryForm" style="display:none">
@@ -230,8 +227,8 @@ async function renderTeamDetail(teamId) {
           <input type="text" id="newMemoryTitle" placeholder="Memory title..." maxlength="100">
         </div>
         <div>
-          <label for="newMemoryContent">Content <span class="memory-char-count" id="newMemoryCount">0/1500</span></label>
-          <textarea id="newMemoryContent" placeholder="Markdown content..." maxlength="1500" oninput="updateNewMemoryCharCount()"></textarea>
+          <label for="newMemoryContent">Content <span class="memory-char-count" id="newMemoryCount">0/200000</span></label>
+          <textarea id="newMemoryContent" placeholder="Markdown content..." maxlength="200000" oninput="updateNewMemoryCharCount()"></textarea>
         </div>
         <div id="addMemoryError" class="login-error" style="display:none"></div>
         <div style="display:flex;gap:8px">
@@ -258,7 +255,7 @@ async function renderTeamDetail(teamId) {
       ${membersHtml}
       <h3 class="team-section-header">添加成员</h3>
       ${addAgentHtml}
-      <h3 class="team-section-header">共享记忆 (${memories.length}/5)</h3>
+      <h3 class="team-section-header">共享记忆 (${memories.length})</h3>
       ${memoriesListHtml}
       ${addMemoryBtnHtml}
       ${addMemoryFormHtml}
@@ -377,13 +374,13 @@ function toggleMemoryEdit(teamId, memoryId) {
 function updateMemoryCharCount(memoryId) {
   const ta = document.getElementById('memoryContent-' + memoryId);
   const counter = document.getElementById('memoryCount-' + memoryId);
-  if (ta && counter) counter.textContent = ta.value.length + '/1500';
+  if (ta && counter) counter.textContent = ta.value.length + '/200000';
 }
 
 function updateNewMemoryCharCount() {
   const ta = document.getElementById('newMemoryContent');
   const counter = document.getElementById('newMemoryCount');
-  if (ta && counter) counter.textContent = ta.value.length + '/1500';
+  if (ta && counter) counter.textContent = ta.value.length + '/200000';
 }
 
 async function doCreateMemory(teamId) {
