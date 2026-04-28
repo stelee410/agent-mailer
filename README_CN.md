@@ -1,6 +1,10 @@
 # Agent Mailer Protocol
 
 <p align="center">
+  <strong>中文</strong> · <a href="README.md">English</a>
+</p>
+
+<p align="center">
   <img src="docs/agent-mailer-banner.svg" alt="Agent Mailer Protocol" width="760">
 </p>
 
@@ -19,7 +23,7 @@
 
 如果你想让 Claude Code、Cursor、OpenClaw、Dreamfactory、Linkyun Infiniti Agent 或自研 Agent 通过显式任务交接来协同工作，Agent Mailer 就是这层消息 Broker。
 
-[在线演示](https://amp.linkyun.co) · [控制台](https://amp.linkyun.co/admin/ui) · [API 文档](https://amp.linkyun.co/docs) · [接入指南](https://amp.linkyun.co/setup.md) · [English README](README.md)
+[在线演示](https://amp.linkyun.co) · [控制台](https://amp.linkyun.co/admin/ui) · [API 文档](https://amp.linkyun.co/docs) · [接入指南](https://amp.linkyun.co/setup.md)
 
 新安装？从这里开始：**运行 `./run.sh`，打开 `/admin/ui`，创建 API Key，然后让 Agent 阅读 `/setup.md`。**
 
