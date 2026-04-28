@@ -5,8 +5,19 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from agent_mailer.auth import create_session_token
+from agent_mailer.db import (
+    SETTING_INVITE_REQUIRED,
+    get_invite_required,
+    set_setting,
+)
 from agent_mailer.dependencies import require_superadmin
-from agent_mailer.models import InviteCodeResponse, LoginResponse, UserResponse
+from agent_mailer.models import (
+    InviteCodeResponse,
+    LoginResponse,
+    SystemSettingsResponse,
+    SystemSettingsUpdateRequest,
+    UserResponse,
+)
 
 router = APIRouter(prefix="/superadmin", tags=["superadmin"])
 
@@ -72,6 +83,23 @@ async def list_users(request: Request, user: dict = Depends(require_superadmin))
         )
         for row in rows
     ]
+
+
+@router.get("/settings", response_model=SystemSettingsResponse)
+async def get_system_settings(request: Request, user: dict = Depends(require_superadmin)):
+    db = request.app.state.db
+    return SystemSettingsResponse(invite_required=await get_invite_required(db))
+
+
+@router.put("/settings", response_model=SystemSettingsResponse)
+async def update_system_settings(
+    request: Request,
+    body: SystemSettingsUpdateRequest,
+    user: dict = Depends(require_superadmin),
+):
+    db = request.app.state.db
+    await set_setting(db, SETTING_INVITE_REQUIRED, "1" if body.invite_required else "0")
+    return SystemSettingsResponse(invite_required=await get_invite_required(db))
 
 
 @router.post("/login-as/{user_id}", response_model=LoginResponse)

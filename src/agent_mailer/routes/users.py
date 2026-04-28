@@ -10,6 +10,7 @@ from agent_mailer.auth import (
     hash_password,
     verify_password,
 )
+from agent_mailer.db import get_invite_required
 from agent_mailer.dependencies import get_current_user
 from agent_mailer.models import (
     ApiKeyCreateRequest,
@@ -17,6 +18,7 @@ from agent_mailer.models import (
     ApiKeyResponse,
     ChangePasswordRequest,
     LoginResponse,
+    RegistrationConfigResponse,
     UpdateFilterTagsRequest,
     UserLoginRequest,
     UserRegisterRequest,
@@ -26,6 +28,13 @@ from agent_mailer.models import (
 router = APIRouter(prefix="/users", tags=["users"])
 
 USERNAME_RE = re.compile(r"^[a-z0-9-]{3,30}$")
+
+
+@router.get("/registration-config", response_model=RegistrationConfigResponse)
+async def registration_config(request: Request):
+    """Public endpoint — lets the registration page detect whether to ask for an invite code."""
+    db = request.app.state.db
+    return RegistrationConfigResponse(invite_required=await get_invite_required(db))
 
 
 @router.post("/register", response_model=UserResponse, status_code=201)
@@ -39,6 +48,10 @@ async def register(request: Request, body: UserRegisterRequest):
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
 
     db = request.app.state.db
+    invite_required = await get_invite_required(db)
+    if invite_required and not (body.invite_code and body.invite_code.strip()):
+        raise HTTPException(status_code=400, detail="Invite code is required")
+
     cursor = await db.execute("SELECT id FROM users WHERE username = ?", (body.username,))
     if await cursor.fetchone():
         raise HTTPException(status_code=409, detail="Username already taken")
@@ -56,15 +69,16 @@ async def register(request: Request, body: UserRegisterRequest):
         (user_id, body.username, hash_password(body.password), int(is_first_user), now),
     )
 
-    # Atomic invite code consumption — avoids TOCTOU race
-    cursor = await db.execute(
-        "UPDATE invite_codes SET used_by = ?, used_at = ? WHERE code = ? AND used_by IS NULL",
-        (user_id, now, body.invite_code),
-    )
-    if cursor.rowcount == 0:
-        # Rollback the user insert
-        await db.execute("DELETE FROM users WHERE id = ?", (user_id,))
-        raise HTTPException(status_code=400, detail="Invalid or already used invite code")
+    if invite_required:
+        # Atomic invite code consumption — avoids TOCTOU race
+        cursor = await db.execute(
+            "UPDATE invite_codes SET used_by = ?, used_at = ? WHERE code = ? AND used_by IS NULL",
+            (user_id, now, body.invite_code),
+        )
+        if cursor.rowcount == 0:
+            # Rollback the user insert
+            await db.execute("DELETE FROM users WHERE id = ?", (user_id,))
+            raise HTTPException(status_code=400, detail="Invalid or already used invite code")
     await db.commit()
     return UserResponse(
         id=user_id,

@@ -1632,11 +1632,12 @@ async function renderAdmin() {
   const main = document.getElementById('main');
   main.innerHTML = `<div class="empty">${esc(t('common.loading'))}</div>`;
 
-  let users = [], inviteCodes = [];
+  let users = [], inviteCodes = [], settings = { invite_required: true };
   try {
-    [users, inviteCodes] = await Promise.all([
+    [users, inviteCodes, settings] = await Promise.all([
       api('/superadmin/users'),
       api('/superadmin/invite-codes'),
+      api('/superadmin/settings'),
     ]);
   } catch (e) {
     main.innerHTML = `<div class="card"><p class="empty">${esc(t('admin.loadFailed', { msg: e.message }))}</p></div>`;
@@ -1674,9 +1675,25 @@ async function renderAdmin() {
         </tbody>
       </table>`;
 
+  const inviteRequired = !!settings.invite_required;
+  const settingsHtml = `
+    <div class="admin-section">
+      <h3>${esc(t('admin.settings'))}</h3>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="settingInviteRequired" ${inviteRequired ? 'checked' : ''} onchange="toggleInviteRequired(this)">
+          <span>${esc(t('admin.settingInviteRequired'))}</span>
+        </label>
+        <span id="settingsStatus" style="font-size:13px"></span>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-top:6px">${esc(t('admin.settingInviteRequiredHint'))}</div>
+    </div>`;
+
   main.innerHTML = `
     <div class="card">
       <h2>${esc(t('admin.title'))}</h2>
+
+      ${settingsHtml}
 
       <div class="admin-section">
         <h3>${esc(t('admin.users'))}</h3>
@@ -1692,6 +1709,31 @@ async function renderAdmin() {
         <div id="inviteCodesTable">${codesHtml}</div>
       </div>
     </div>`;
+}
+
+async function toggleInviteRequired(checkbox) {
+  const statusEl = document.getElementById('settingsStatus');
+  const desired = !!checkbox.checked;
+  checkbox.disabled = true;
+  if (statusEl) { statusEl.textContent = t('common.saving'); statusEl.style.color = 'var(--muted)'; }
+  try {
+    const result = await api('/superadmin/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ invite_required: desired }),
+    });
+    checkbox.checked = !!result.invite_required;
+    if (statusEl) {
+      statusEl.textContent = t('admin.settingsSaved');
+      statusEl.style.color = 'var(--success)';
+      setTimeout(() => { statusEl.textContent = ''; }, 3000);
+    }
+  } catch (e) {
+    checkbox.checked = !desired;
+    if (statusEl) { statusEl.textContent = t('common.errorPrefix') + e.message; statusEl.style.color = 'var(--danger)'; }
+  } finally {
+    checkbox.disabled = false;
+  }
 }
 
 async function generateInviteCode() {

@@ -405,6 +405,114 @@ async def test_non_superadmin_forbidden(client, superadmin):
     assert resp.status_code == 403
 
 
+# --- Registration toggle (invite_required setting) ---
+
+
+async def test_registration_config_default(client):
+    resp = await client.get("/users/registration-config")
+    assert resp.status_code == 200
+    assert resp.json() == {"invite_required": True}
+
+
+async def test_admin_settings_get_default(client, superadmin):
+    c, token, _ = superadmin
+    resp = await c.get(
+        "/superadmin/settings", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"invite_required": True}
+
+
+async def test_admin_settings_non_superadmin_forbidden(client, superadmin):
+    c, token, _ = superadmin
+    resp = await c.post(
+        "/superadmin/invite-codes", headers={"Authorization": f"Bearer {token}"}
+    )
+    code = resp.json()["code"]
+    await c.post(
+        "/users/register",
+        json={"username": "regtoggle", "password": "password123", "invite_code": code},
+    )
+    resp = await c.post(
+        "/users/login",
+        json={"username": "regtoggle", "password": "password123"},
+    )
+    regular_token = resp.json()["token"]
+
+    resp = await c.get(
+        "/superadmin/settings",
+        headers={"Authorization": f"Bearer {regular_token}"},
+    )
+    assert resp.status_code == 403
+
+    resp = await c.put(
+        "/superadmin/settings",
+        json={"invite_required": False},
+        headers={"Authorization": f"Bearer {regular_token}"},
+    )
+    assert resp.status_code == 403
+
+
+async def test_registration_open_when_invite_disabled(client, superadmin):
+    c, token, _ = superadmin
+
+    resp = await c.put(
+        "/superadmin/settings",
+        json={"invite_required": False},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"invite_required": False}
+
+    resp = await c.get("/users/registration-config")
+    assert resp.json() == {"invite_required": False}
+
+    # Without invite_code: succeeds.
+    resp = await c.post(
+        "/users/register",
+        json={"username": "openuser", "password": "password123"},
+    )
+    assert resp.status_code == 201
+
+    # Even an invalid invite_code is ignored when the setting is off.
+    resp = await c.post(
+        "/users/register",
+        json={"username": "openuser2", "password": "password123", "invite_code": "INVALID0"},
+    )
+    assert resp.status_code == 201
+
+
+async def test_registration_still_requires_invite_when_enabled(client, superadmin):
+    c, token, _ = superadmin
+
+    # Disable, then re-enable.
+    await c.put(
+        "/superadmin/settings",
+        json={"invite_required": False},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    resp = await c.put(
+        "/superadmin/settings",
+        json={"invite_required": True},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.json() == {"invite_required": True}
+
+    # Missing invite_code → 400.
+    resp = await c.post(
+        "/users/register",
+        json={"username": "needsinvite", "password": "password123"},
+    )
+    assert resp.status_code == 400
+
+    # Invalid invite_code → 400.
+    resp = await c.post(
+        "/users/register",
+        json={"username": "needsinvite2", "password": "password123", "invite_code": "BAD12345"},
+    )
+    assert resp.status_code == 400
+
+
 # --- Full lifecycle E2E ---
 
 

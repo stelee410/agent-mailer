@@ -149,7 +149,19 @@ class TrashedMessageDetail(BaseModel):
 class UserRegisterRequest(BaseModel):
     username: str
     password: str
-    invite_code: str
+    invite_code: str | None = None
+
+
+class RegistrationConfigResponse(BaseModel):
+    invite_required: bool
+
+
+class SystemSettingsResponse(BaseModel):
+    invite_required: bool
+
+
+class SystemSettingsUpdateRequest(BaseModel):
+    invite_required: bool
 
 
 class UserLoginRequest(BaseModel):

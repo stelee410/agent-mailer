@@ -109,6 +109,7 @@
       'common.back': '← 返回',
       'common.error': '错误',
       'common.errorPrefix': '错误：',
+      'common.saving': '保存中...',
       'common.failed': '失败',
       'common.failedPrefix': '失败：',
       'common.noSubject': '(无主题)',
@@ -332,6 +333,10 @@
       'admin.roleUser': '普通用户',
       'admin.generateCode': '生成邀请码',
       'admin.generated': '已生成：{code}',
+      'admin.settings': '系统设置',
+      'admin.settingInviteRequired': '要求邀请码注册',
+      'admin.settingInviteRequiredHint': '关闭后，新用户无需邀请码即可直接注册账号。',
+      'admin.settingsSaved': '已保存',
 
       // --- Teams ---
       'teams.title': 'Teams',
@@ -554,6 +559,7 @@
       'common.back': '← Back',
       'common.error': 'Error',
       'common.errorPrefix': 'Error: ',
+      'common.saving': 'Saving...',
       'common.failed': 'Failed',
       'common.failedPrefix': 'Failed: ',
       'common.noSubject': '(no subject)',
@@ -777,6 +783,10 @@
       'admin.roleUser': 'User',
       'admin.generateCode': 'Generate Invite Code',
       'admin.generated': 'Generated: {code}',
+      'admin.settings': 'System Settings',
+      'admin.settingInviteRequired': 'Require invite code for registration',
+      'admin.settingInviteRequiredHint': 'When off, new users can register without an invite code.',
+      'admin.settingsSaved': 'Saved',
 
       // --- Teams ---
       'teams.title': 'Teams',

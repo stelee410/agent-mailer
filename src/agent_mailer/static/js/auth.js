@@ -19,11 +19,30 @@ function showLoginForm() {
   document.getElementById('loginSubtitle').textContent = t('login.subtitleSignIn');
 }
 
-function showRegisterForm() {
+async function showRegisterForm() {
   document.getElementById('loginFormWrap').style.display = 'none';
   document.getElementById('registerFormWrap').style.display = '';
   document.getElementById('registerError').style.display = 'none';
   document.getElementById('loginSubtitle').textContent = t('login.subtitleRegister');
+  await refreshRegistrationConfig();
+}
+
+let _registrationInviteRequired = true;
+
+async function refreshRegistrationConfig() {
+  try {
+    const resp = await fetch(BASE + '/users/registration-config', { credentials: 'same-origin' });
+    if (!resp.ok) return;
+    const cfg = await resp.json();
+    _registrationInviteRequired = !!cfg.invite_required;
+  } catch (e) { /* keep last known value */ }
+  applyInviteCodeVisibility();
+}
+
+function applyInviteCodeVisibility() {
+  const wrap = document.getElementById('regInviteCodeWrap');
+  if (!wrap) return;
+  wrap.style.display = _registrationInviteRequired ? '' : 'none';
 }
 
 async function doLogin() {
@@ -66,7 +85,8 @@ async function doRegister() {
   const password = document.getElementById('regPassword').value;
   const invite_code = document.getElementById('regInviteCode').value.trim();
   errEl.style.display = 'none';
-  if (!username || !password || !invite_code) {
+  const needsInvite = _registrationInviteRequired;
+  if (!username || !password || (needsInvite && !invite_code)) {
     errEl.textContent = t('login.errorMissingFields');
     errEl.style.display = '';
     return;
@@ -74,11 +94,14 @@ async function doRegister() {
   btn.disabled = true;
   btn.textContent = t('login.creatingAccount');
   try {
+    const payload = needsInvite
+      ? { username, password, invite_code }
+      : { username, password };
     const resp = await fetch(BASE + '/users/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
-      body: JSON.stringify({ username, password, invite_code }),
+      body: JSON.stringify(payload),
     });
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({ detail: resp.statusText }));

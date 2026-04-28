@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
 <title>Agent Mailer - Operator Console</title>
-<link rel="stylesheet" href="/static/styles.css?v=46">
+<link rel="stylesheet" href="/static/styles.css?v=47">
 </head>
 <body>
 
@@ -51,7 +51,7 @@
           <label for="regPassword" data-i18n="login.password">Password</label>
           <input type="password" id="regPassword" placeholder="Choose a password" autocomplete="new-password" data-i18n-placeholder="login.regPasswordPlaceholder">
         </div>
-        <div>
+        <div id="regInviteCodeWrap">
           <label for="regInviteCode" data-i18n="login.inviteCode">Invite Code</label>
           <input type="text" id="regInviteCode" placeholder="Enter invite code" data-i18n-placeholder="login.inviteCodePlaceholder">
         </div>
@@ -185,13 +185,13 @@ let acIndex = -1;
 let filterTags = new Set();
 let currentUser = null;
 </script>
-<script src="/static/js/i18n.js?v=2"></script>
+<script src="/static/js/i18n.js?v=3"></script>
 <script src="/static/js/theme.js?v=39"></script>
 <script src="/static/js/helpers.js?v=46"></script>
 <script src="/static/js/api.js?v=45"></script>
-<script src="/static/js/auth.js?v=38"></script>
+<script src="/static/js/auth.js?v=39"></script>
 <script src="/static/js/sidebar.js?v=38"></script>
-<script src="/static/js/views.js?v=46"></script>
+<script src="/static/js/views.js?v=47"></script>
 <script src="/static/js/teams.js?v=47"></script>
 <script src="/static/js/tags.js?v=38"></script>
 <script src="/static/js/events.js?v=42"></script>

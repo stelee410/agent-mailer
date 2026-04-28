@@ -122,6 +122,13 @@ PG_SCHEMA = [
         UNIQUE(team_id, title)
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS system_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )
+    """,
 ]
 
 # SQLite-only legacy schema (for CREATE TABLE IF NOT EXISTS + additive migrations)
@@ -244,6 +251,20 @@ CREATE TABLE IF NOT EXISTS team_memories (
     UNIQUE(team_id, title)
 );
 """
+
+SYSTEM_SETTINGS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS system_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+"""
+
+# Known setting keys (kept here so callers don't sprinkle string literals)
+SETTING_INVITE_REQUIRED = "invite_required"
+DEFAULT_SETTINGS: dict[str, str] = {
+    SETTING_INVITE_REQUIRED: "1",
+}
 
 # --- Visibility SQL filters ---
 
@@ -449,9 +470,59 @@ async def init_db(db):
         await db.executescript(FILES_SCHEMA)
         await db.executescript(TEAMS_SCHEMA)
         await db.executescript(TEAM_MEMORIES_SCHEMA)
+        await db.executescript(SYSTEM_SETTINGS_SCHEMA)
         await _add_column_if_missing(db, "agents", "tags", "TEXT NOT NULL DEFAULT '[]'")
         await _add_column_if_missing(db, "agents", "user_id", "TEXT")
         await _add_column_if_missing(db, "agents", "last_seen", "TEXT")
         await _add_column_if_missing(db, "users", "filter_tags", "TEXT NOT NULL DEFAULT '[]'")
         await _add_column_if_missing(db, "agents", "team_id", "TEXT REFERENCES teams(id) ON DELETE SET NULL")
+    await _seed_default_settings(db)
     await db.commit()
+
+
+# ── Settings helpers ────────────────────────────────────────────────
+
+async def _seed_default_settings(db) -> None:
+    """Insert default rows for any setting key that doesn't yet exist."""
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    for key, default in DEFAULT_SETTINGS.items():
+        cursor = await db.execute(
+            "SELECT 1 FROM system_settings WHERE key = ?", (key,)
+        )
+        if await cursor.fetchone():
+            continue
+        await db.execute(
+            "INSERT INTO system_settings (key, value, updated_at) VALUES (?, ?, ?)",
+            (key, default, now),
+        )
+
+
+async def get_setting(db, key: str, default: str | None = None) -> str | None:
+    cursor = await db.execute(
+        "SELECT value FROM system_settings WHERE key = ?", (key,)
+    )
+    row = await cursor.fetchone()
+    if row is None:
+        return DEFAULT_SETTINGS.get(key, default)
+    return row["value"]
+
+
+async def set_setting(db, key: str, value: str) -> None:
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    cursor = await db.execute(
+        "UPDATE system_settings SET value = ?, updated_at = ? WHERE key = ?",
+        (value, now, key),
+    )
+    if cursor.rowcount == 0:
+        await db.execute(
+            "INSERT INTO system_settings (key, value, updated_at) VALUES (?, ?, ?)",
+            (key, value, now),
+        )
+    await db.commit()
+
+
+async def get_invite_required(db) -> bool:
+    raw = await get_setting(db, SETTING_INVITE_REQUIRED, "1")
+    return str(raw).strip() not in ("0", "false", "False", "")
