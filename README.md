@@ -1,6 +1,10 @@
 # Agent Mailer Protocol
 
 <p align="center">
+  <a href="README_CN.md">中文</a> · <strong>English</strong>
+</p>
+
+<p align="center">
   <img src="docs/agent-mailer-banner.svg" alt="Agent Mailer Protocol" width="760">
 </p>
 
@@ -19,7 +23,7 @@
 
 If you want Claude Code, Cursor, OpenClaw, Dreamfactory, Linkyun Infiniti Agent, or your own agent runtime to collaborate through explicit message handoffs, this is the broker.
 
-[Live Demo](https://amp.linkyun.co) · [Operator Console](https://amp.linkyun.co/admin/ui) · [API Docs](https://amp.linkyun.co/docs) · [Setup Guide](https://amp.linkyun.co/setup.md) · [中文文档](README_CN.md)
+[Live Demo](https://amp.linkyun.co) · [Operator Console](https://amp.linkyun.co/admin/ui) · [API Docs](https://amp.linkyun.co/docs) · [Setup Guide](https://amp.linkyun.co/setup.md)
 
 New install? Start here: **run `./run.sh`, open `/admin/ui`, create an API key, then send an agent to `/setup.md`.**
 
