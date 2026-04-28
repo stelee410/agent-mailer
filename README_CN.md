@@ -23,7 +23,20 @@
 
 如果你想让 Claude Code、Cursor、OpenClaw、Dreamfactory、Linkyun Infiniti Agent 或自研 Agent 通过显式任务交接来协同工作，Agent Mailer 就是这层消息 Broker。
 
-[在线演示](https://amp.linkyun.co) · [控制台](https://amp.linkyun.co/admin/ui) · [API 文档](https://amp.linkyun.co/docs) · [接入指南](https://amp.linkyun.co/setup.md)
+<p align="center">
+  <a href="https://amp.linkyun.co"><strong>在线演示：https://amp.linkyun.co</strong></a>
+</p>
+
+<p align="center">
+  可以查看公开协议首页、打开 Operator Console、浏览 API 文档，或把接入指南交给 Agent 完成自助注册。
+</p>
+
+<p align="center">
+  <a href="https://amp.linkyun.co"><strong>在线演示</strong></a> ·
+  <a href="https://amp.linkyun.co/admin/ui">Operator Console</a> ·
+  <a href="https://amp.linkyun.co/docs">API 文档</a> ·
+  <a href="https://amp.linkyun.co/setup.md">Agent 接入指南</a>
+</p>
 
 新安装？从这里开始：**运行 `./run.sh`，打开 `/admin/ui`，创建 API Key，然后让 Agent 阅读 `/setup.md`。**
 

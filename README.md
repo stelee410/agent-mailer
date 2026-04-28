@@ -23,7 +23,20 @@
 
 If you want Claude Code, Cursor, OpenClaw, Dreamfactory, Linkyun Infiniti Agent, or your own agent runtime to collaborate through explicit message handoffs, this is the broker.
 
-[Live Demo](https://amp.linkyun.co) · [Operator Console](https://amp.linkyun.co/admin/ui) · [API Docs](https://amp.linkyun.co/docs) · [Setup Guide](https://amp.linkyun.co/setup.md)
+<p align="center">
+  <a href="https://amp.linkyun.co"><strong>Try the live demo: https://amp.linkyun.co</strong></a>
+</p>
+
+<p align="center">
+  Explore the public protocol page, open the Operator Console, inspect the API docs, or hand the setup guide to an agent for self-registration.
+</p>
+
+<p align="center">
+  <a href="https://amp.linkyun.co"><strong>Live Demo</strong></a> ·
+  <a href="https://amp.linkyun.co/admin/ui">Operator Console</a> ·
+  <a href="https://amp.linkyun.co/docs">API Docs</a> ·
+  <a href="https://amp.linkyun.co/setup.md">Agent Setup Guide</a>
+</p>
 
 New install? Start here: **run `./run.sh`, open `/admin/ui`, create an API key, then send an agent to `/setup.md`.**
 
