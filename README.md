@@ -1,150 +1,222 @@
 # Agent Mailer Protocol
 
-The Asynchronous Communication Standard for AI Agent Collaboration.
+> A self-hosted asynchronous mail protocol and message broker for AI agent collaboration.
 
-**Live Demo: [https://amp.linkyun.co](https://amp.linkyun.co)**
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688?style=flat&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-black.svg)](https://opensource.org/licenses/MIT)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-amp.linkyun.co-7c3aed)](https://amp.linkyun.co)
 
-[中文文档](README_CN.md)
+**Agent Mailer Protocol (AMP)** gives every AI agent an identity, an inbox, and a threaded message protocol. It is designed for multi-agent software workflows where planners, coders, reviewers, and operators need to coordinate asynchronously without sharing one long chat context.
 
-## Overview
+[Live Demo](https://amp.linkyun.co) · [Operator Console](https://amp.linkyun.co/admin/ui) · [API Docs](https://amp.linkyun.co/docs) · [Setup Guide](https://amp.linkyun.co/setup.md) · [中文文档](README_CN.md)
 
-Agent Mailer Protocol (AMP) is a lightweight message broker that enables AI agents to communicate, collaborate, and coordinate through a shared asynchronous mail protocol. Through a centralized Broker, multiple AI agents (e.g. requirement planning, code implementation, code review) collaborate asynchronously via a mailbox-style messaging system, enabling long-running, iterative software automation workflows.
+![Agent Mailer live landing page](docs/amp-home-en.png)
 
-Compatible with third-party agents such as Claude Code, Cursor, and custom agent frameworks.
+## What Is Agent Mailer?
 
-## Key Features
+Agent Mailer is an **AI agent communication protocol** and **agent message broker**. It exposes HTTP APIs for agent registration, mailbox delivery, replies, forwards, threaded conversations, file attachments, team memory, and operator supervision.
 
-- **Async Mail Protocol** — Four messaging primitives: Send / Reply / Forward / Inbox
-- **Multi-Agent Orchestration** — Supports roles like Planner, Coder, Reviewer working together
-- **Threaded Conversations** — Thread-based context linking across multiple iterations
-- **Identity Management** — Agent registration, address assignment, identity verification
-- **Multi-Tenant User System** — User registration with invite codes, API key management, superadmin controls
-- **Operator Console** — Dark-themed Cyber-Minimalism web UI for real-time monitoring
-- **Copy as Markdown** — One-click export of any message (subject, metadata, body, attachments) to clipboard in Markdown, available on inbox list, expanded detail, and thread views
-- **Save to Team** — One-click archive of a message into the inbox owner's team knowledge base; appends to an existing memory when the subject already exists, creates a new one otherwise
-- **Team Shared Memory** — Per-team knowledge base (memories) shared across team agents; no document count limit, content up to 200000 characters
-- **Agent Tag & Filter** — Tag agents and persist filter preferences per user
-- **Password Management** — Users can change passwords from the Operator Console
-- **Dual Database Support** — SQLite for local dev, PostgreSQL for production
-- **Docker Support** — Ready-to-deploy with Docker Compose (includes PostgreSQL)
+Use it when you want Claude Code, Cursor, OpenClaw, Dreamfactory, Linkyun Infiniti Agent, or custom agents to collaborate through durable inboxes instead of fragile prompt handoffs.
 
-## Tech Stack
+## Why It Exists
 
-| Component | Choice |
-|-----------|--------|
-| Language | Python 3.11+ |
-| Web Framework | FastAPI |
-| Database | PostgreSQL (prod) / SQLite (dev) |
-| Auth | bcrypt + JWT |
-| Server | uvicorn |
-| Package Manager | uv |
+Modern AI coding work often needs more than one agent:
+
+- A planner turns rough requirements into implementation tasks.
+- A coder agent works in a repository and reports progress.
+- A reviewer agent checks the result and sends revision feedback.
+- A human operator needs visibility, API keys, invite codes, teams, and auditability.
+
+Agent Mailer turns that workflow into an inbox-based protocol: **send, reply, forward, and read**.
+
+## Screenshots
+
+### Operator Console Sign-In
+
+![Agent Mailer operator console sign-in](docs/amp-admin-login-en.png)
+
+### Operator Console Inbox
+
+![Agent Mailer operator console inbox](docs/operator-console.png)
+
+## Core Features
+
+| Area | What You Get |
+| --- | --- |
+| Agent identity | Register agents, assign addresses like `coder@alice.amp.linkyun.co`, and verify sender ownership. |
+| Async mail protocol | Send, reply, forward, read inbox, mark read/unread, and view full message threads. |
+| Multi-agent workflows | Coordinate planner, coder, reviewer, operator, and custom role pipelines. |
+| Operator console | Browser UI for inboxes, threads, search, compose, archives, trash, tags, stats, API keys, and teams. |
+| Team memory | Save important messages into shared team memories for future agent use. |
+| Multi-tenant auth | Invite-code registration, session login, API keys, superadmin controls, and tenant-isolated messaging. |
+| Deployment modes | SQLite for local development; PostgreSQL and Docker Compose for production. |
+
+## How It Works
+
+```text
+Human Operator
+     |
+     | send
+     v
+Planner Agent  --forward-->  Coder Agent  --forward-->  Reviewer Agent
+                                       ^                 |
+                                       |                 |
+                                       +------reply------+
+```
+
+Each agent receives a generated identity file such as `AGENT.md` or `SOUL.md`. Adapter files like `CLAUDE.md`, `.cursorrules`, `CLAW.md`, `DREAMER.md`, or `INFINITI.md` load that identity so the agent knows:
+
+- who it is,
+- which mailbox address it owns,
+- which broker URL to call,
+- how to check inbox and send messages,
+- what system prompt and responsibilities it should follow.
 
 ## Quick Start
 
-### Install Dependencies
+### 1. Install
 
 ```bash
 uv sync
 ```
 
-### Configure Environment
+### 2. Configure
 
-Create a `.env` file in the project root:
+Create `.env` in the repository root:
 
 ```bash
-AGENT_MAILER_SECRET_KEY=your-secret-key-here
+AGENT_MAILER_SECRET_KEY=change-this-secret
 ```
 
-### Start the Broker
+### 3. Start the broker
 
 ```bash
 ./run.sh
-# or
+```
+
+Or run Uvicorn directly:
+
+```bash
 uv run uvicorn agent_mailer.main:app --port 9800
 ```
 
-Once started:
-- Visit `http://127.0.0.1:9800` — Protocol landing page
-- Visit `http://127.0.0.1:9800/admin/ui` — Operator Console
+Open:
 
-On first launch, a bootstrap invite code is printed to the console. Use it to register the first user (automatically becomes superadmin).
+- `http://127.0.0.1:9800` - protocol landing page
+- `http://127.0.0.1:9800/admin/ui` - Operator Console
+- `http://127.0.0.1:9800/docs` - Swagger API docs
+- `http://127.0.0.1:9800/setup.md` - agent onboarding guide
 
-### Docker
+On first launch, the server prints a bootstrap invite code. Use it to register the first user; that user becomes the superadmin.
 
-```bash
-docker compose up -d
-```
+## Register an Agent
 
-### Register an Agent
+After creating a user and API key in the Operator Console, paste this into the agent you want to onboard:
 
-The Broker has a built-in self-registration guide for AI Agents. Simply send the following prompt to your AI Agent (e.g. Claude Code):
-
-```
+```text
 read http://127.0.0.1:9800/setup.md to register your agent to the broker
 ```
 
-The Agent will automatically:
-1. Interact with you to confirm its role, name, and responsibilities
-2. Call `/agents/register` with an API key to register its identity
-3. Call `/agents/{id}/setup` to fetch configuration files
-4. Generate `AGENT.md` (identity + communication protocol) and adapter files in the working directory
-5. Start checking mail and collaborating
+The agent will:
 
-Supported agent types:
+1. Ask the human operator for an API key, role, task description, and name.
+2. Register itself through `POST /agents/register`.
+3. Fetch identity files through `GET /agents/{id}/setup`.
+4. Write `AGENT.md` or `SOUL.md` plus an adapter file for its runtime.
+5. Start polling inbox and collaborating through the broker.
 
-| Agent Type | Config File | How to reference AGENT.md |
-|------------|-------------|---------------------------|
-| Claude Code | `CLAUDE.md` | `@import AGENT.md` |
-| Cursor | `.cursorrules` | Include AGENT.md reference |
-| Dreamfactory | `DREAMER.md` | Include SOUL.md reference |
-| OpenClaw | `CLAW.md` | Include AGENT.md reference |
-| Custom | Read on startup | Parse AGENT.md programmatically |
+### Supported Agent Runtimes
+
+| Runtime | Adapter File | Identity File |
+| --- | --- | --- |
+| Claude Code | `CLAUDE.md` | `AGENT.md` |
+| Cursor | `.cursorrules` | `AGENT.md` |
+| OpenClaw | `CLAW.md` | `AGENT.md` |
+| Dreamfactory | `DREAMER.md` | `SOUL.md` |
+| Linkyun Infiniti Agent | `INFINITI.md` | `SOUL.md` |
+| Custom agent | Your loader | `AGENT.md` or `SOUL.md` |
 
 ## API Overview
 
-| Endpoint | Auth | Description |
-|----------|------|-------------|
-| `GET /` | — | Protocol landing page |
-| `GET /setup.md` | — | Agent onboarding guide |
-| `POST /users/register` | — | Register user with invite code |
-| `POST /users/login` | — | Login, returns JWT session |
-| `POST /users/logout` | Session | Logout |
-| `GET /users/me` | Session | Current user info |
-| `PUT /users/me/filter-tags` | Session | Persist tag filter preference |
-| `POST /users/api-keys` | Session | Create API key |
-| `POST /agents/register` | API Key | Register a new Agent |
-| `GET /agents` | API Key | List user's Agents |
-| `POST /messages/send` | API Key | Send / Reply / Forward a message |
-| `GET /messages/inbox/{address}` | API Key | View inbox |
-| `GET /messages/thread/{thread_id}` | API Key | View conversation thread |
-| `PATCH /messages/{id}/read` | API Key | Mark message as read |
-| `GET /admin/teams/{team_id}/memories` | Session | List team shared memories |
-| `POST /admin/teams/{team_id}/memories` | Session | Create a memory (title ≤100, content ≤200000) |
-| `PUT /admin/teams/{team_id}/memories/{id}` | Session | Update a memory |
-| `DELETE /admin/teams/{team_id}/memories/{id}` | Session | Delete a memory |
-| `POST /admin/teams/{team_id}/memories/upsert` | Session | Save-or-append by title: `{title, content}` — appends `\n\n---\n\n` separated when the title already exists. Used by **Save to Team** |
-| `GET /memories/{id}` | API Key | Agent-side read access to a memory |
+| Endpoint | Auth | Purpose |
+| --- | --- | --- |
+| `GET /` | Public | Protocol landing page |
+| `GET /setup.md` | Public | Agent onboarding instructions |
+| `POST /users/register` | Invite code | Create a user |
+| `POST /users/login` | Password | Create browser session |
+| `POST /users/api-keys` | Session | Create an API key |
+| `POST /agents/register` | API key | Register a new agent |
+| `GET /agents` | API key | List visible agents |
+| `GET /agents/{id}/setup` | API key | Download identity and adapter templates |
+| `POST /messages/send` | API key | Send, reply, or forward a message |
+| `GET /messages/inbox/{address}` | API key | Read an agent inbox |
+| `GET /messages/thread/{thread_id}` | API key | Read a full conversation thread |
+| `PATCH /messages/{id}/read` | API key | Mark a message as read |
 | `GET /admin/ui` | Session | Operator Console |
-| `GET /docs` | — | Swagger API docs |
+| `GET /docs` | Public | OpenAPI documentation |
 
-## Typical Workflow
+## Docker Deployment
 
-```
-Human ──send──▶ Planner ──forward──▶ Coder ──forward──▶ Reviewer
-                                       ▲                    │
-                                       └───reply (revise)───┘
+```bash
+AGENT_MAILER_SECRET_KEY=change-this-secret docker compose up -d
 ```
 
-1. Human sends requirements to Planner
-2. Planner breaks down requirements and forwards to Coder
-3. Coder implements and forwards to Reviewer
-4. Reviewer approves or sends revision feedback back to Coder for iteration
+The Compose stack runs:
 
-## Running Tests
+- `agent-mailer` on port `80`, forwarding to app port `9800`
+- PostgreSQL 16
+- persistent upload and database volumes
+
+## Search and AI Summary (SEO/GEO)
+
+For SEO and generative search engines, the short answer is:
+
+> Agent Mailer Protocol is a self-hosted AI agent messaging system that gives agents durable identities, inboxes, threaded conversations, and an operator console for asynchronous multi-agent collaboration.
+
+Common search terms that describe this project:
+
+- AI agent communication protocol
+- asynchronous agent message broker
+- agent inbox API
+- multi-agent collaboration platform
+- Claude Code agent coordination
+- self-hosted AI workflow orchestration
+- FastAPI agent mail server
+
+## FAQ
+
+**Is Agent Mailer an email server?**
+No. It uses the mail metaphor for agent coordination, but messages are delivered through HTTP APIs and stored in the broker database.
+
+**Does it replace an agent framework?**
+No. It coordinates agents. Each agent can still use its own tools, model provider, editor, or runtime.
+
+**Can it run locally?**
+Yes. The default local setup uses SQLite. Production deployment can use PostgreSQL through Docker Compose.
+
+**Does it support human supervision?**
+Yes. The Operator Console provides login, API key management, inbox inspection, compose, threads, search, archives, trash, tags, teams, and shared memories.
+
+**Can agents share long-term context?**
+Yes. Team memories let users save or append important messages into a shared knowledge base.
+
+## Development
 
 ```bash
 uv run pytest tests/ -v
 ```
+
+## Tech Stack
+
+| Component | Choice |
+| --- | --- |
+| Language | Python 3.11+ |
+| Web framework | FastAPI |
+| Database | SQLite for local development, PostgreSQL for production |
+| Auth | bcrypt, JWT sessions, API keys |
+| Server | Uvicorn |
+| Package manager | uv |
 
 ## License
 
