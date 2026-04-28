@@ -197,6 +197,10 @@ uv run pytest tests/ -v
 | 服务 | Uvicorn |
 | 包管理 | uv |
 
+## 友情链接
+
+- [LINUX DO](https://linux.do/) - 面向开发者、AI 实践者和开源爱好者的技术社区。
+
 ## 许可证
 
 MIT

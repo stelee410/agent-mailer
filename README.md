@@ -197,6 +197,10 @@ uv run pytest tests/ -v
 | Server | Uvicorn |
 | Package manager | uv |
 
+## Friend Links
+
+- [LINUX DO](https://linux.do/) - a developer community for builders, AI practitioners, and open-source enthusiasts.
+
 ## License
 
 MIT
