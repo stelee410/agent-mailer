@@ -2036,14 +2036,10 @@ function downloadTextAs(filename, content) {
 }
 
 function _renderExportModal({ agentId, name, format, filename, content, hasFreshKey }) {
-  // Two safe-by-default actions and one destructive action (regen + download),
-  // plus copy/close. The destructive action requires confirmation.
-  const safeBtns = `
-    <button class="login-btn" onclick="copyText(${JSON.stringify(content)}); this.textContent='${esc(t('splash.copied'))}'">${esc(t('splash.copy'))}</button>
-    <button class="login-btn" onclick="downloadTextAs(${JSON.stringify(filename)}, ${JSON.stringify(content)})">${esc(t('admin.agentsExportDownloadPlaceholder'))}</button>
-    <button class="login-btn" style="background:var(--danger,#c0392b);color:#fff" onclick="regenAndDownloadAdminAgentMd('${esc(agentId)}', '${esc(name)}', '${esc(format)}', ${JSON.stringify(filename)})">${esc(t('admin.agentsExportRegenAndDownload'))}</button>
-    <button class="modal-cancel" onclick="closeAdminAgentModal()">${esc(t('common.confirm'))}</button>
-  `;
+  // Buttons are wired with addEventListener instead of inline onclick so the
+  // markdown payload (which carries embedded `"` and `'` from the protocol
+  // section + security note) cannot break out of the HTML attribute and
+  // silently disable Copy / Download — that class of bug bit us once already.
   const hint = hasFreshKey
     ? t('admin.agentsExportHintWithKey')
     : t('admin.agentsExportHint');
@@ -2051,8 +2047,32 @@ function _renderExportModal({ agentId, name, format, filename, content, hasFresh
     <h3 style="margin-top:0">${esc(filename)} — ${esc(name)}</h3>
     <p style="font-size:12px;color:var(--muted)">${esc(hint)}</p>
     <textarea readonly rows="20" style="width:100%;font-family:var(--mono,monospace);font-size:12px">${esc(content)}</textarea>
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap">${safeBtns}</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap">
+      <button id="aaExportCopyBtn" class="login-btn">${esc(t('splash.copy'))}</button>
+      <button id="aaExportDownloadBtn" class="login-btn">${esc(t('admin.agentsExportDownloadPlaceholder'))}</button>
+      <button id="aaExportRegenBtn" class="login-btn" style="background:var(--danger,#c0392b);color:#fff">${esc(t('admin.agentsExportRegenAndDownload'))}</button>
+      <button id="aaExportCloseBtn" class="modal-cancel">${esc(t('common.confirm'))}</button>
+    </div>
   `);
+  const copyBtn = document.getElementById('aaExportCopyBtn');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', () => {
+      copyText(content);
+      copyBtn.textContent = t('splash.copied');
+    });
+  }
+  const downloadBtn = document.getElementById('aaExportDownloadBtn');
+  if (downloadBtn) {
+    downloadBtn.addEventListener('click', () => downloadTextAs(filename, content));
+  }
+  const regenBtn = document.getElementById('aaExportRegenBtn');
+  if (regenBtn) {
+    regenBtn.addEventListener('click', () => regenAndDownloadAdminAgentMd(agentId, name, format, filename));
+  }
+  const closeBtn = document.getElementById('aaExportCloseBtn');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', closeAdminAgentModal);
+  }
 }
 
 async function exportAdminAgentMd(agentId, name, format) {

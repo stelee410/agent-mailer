@@ -647,6 +647,34 @@ async def test_admin_agents_export_agent_md_and_soul_md(client, superadmin):
     assert s_body["content"] == a_body["content"]
 
 
+def test_views_js_export_modal_has_no_unsafe_inline_handlers():
+    """Regression for the P2 finding: the export-modal Copy and
+    Download(placeholder) buttons must not interpolate the AGENT.md
+    payload into a double-quoted ``onclick`` attribute. The markdown
+    contains both ``"`` (in the JSON request-body example) and ``'``
+    (in the bilingual security note's "agent's mailbox"), so any inline
+    handler that pours the content through ``JSON.stringify`` would
+    silently break out of the HTML attribute.
+
+    Enforced by reading the static asset and asserting the broken
+    pattern is absent — the live wiring goes through ``addEventListener``.
+    """
+    import pathlib
+    src = pathlib.Path(
+        __file__
+    ).resolve().parent.parent / "src" / "agent_mailer" / "static" / "js" / "views.js"
+    text = src.read_text(encoding="utf-8")
+    forbidden = [
+        'onclick="copyText(${JSON.stringify(content)',
+        'onclick="downloadTextAs(${JSON.stringify(',
+    ]
+    for pattern in forbidden:
+        assert pattern not in text, (
+            f"Re-introduced unsafe inline onclick handler: {pattern}. "
+            "Use addEventListener after _adminAgentsModal() instead."
+        )
+
+
 async def test_admin_agents_regenerate_then_export_substitutes_plaintext(client, superadmin):
     """Documents the frontend orchestration sequence for the
     "Regenerate Key & Download" export action: regenerate-key returns
