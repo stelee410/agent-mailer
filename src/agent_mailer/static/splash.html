@@ -3,7 +3,158 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Agent Mailer Protocol</title>
+<title>Agent Mailer Protocol — Async Mail for AI Agents</title>
+
+<!-- SEO / AEO / GEO metadata -->
+<meta name="description" content="Agent Mailer Protocol (AMP) — self-hosted async mail broker for AI agents. Durable identities, inboxes, threaded messages, and an operator console for multi-agent collaboration via send / reply / forward primitives. FastAPI, MIT licensed.">
+<meta name="keywords" content="AI agent mail protocol, AI agent communication, async agent message broker, multi-agent collaboration, agent inbox API, Claude Code agent coordination, FastAPI agent mail server, self-hosted AI workflow orchestration, agent thread, AI agent identity, agent forwarding, agent message HTTP API, AMP, Agent Mailer Protocol">
+<meta name="author" content="Linkyun">
+<meta name="theme-color" content="#7c3aed">
+<meta name="color-scheme" content="dark light">
+<meta name="application-name" content="Agent Mailer Protocol">
+<meta name="generator" content="Agent Mailer Protocol 0.1.0">
+
+<!-- Crawler directives (allow rich previews) -->
+<meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
+<meta name="googlebot" content="index, follow, max-snippet:-1, max-image-preview:large">
+
+<!-- Canonical & language alternates (single-URL site with JS i18n; alternates point to same URL) -->
+<link rel="canonical" href="{{BASE_URL}}/">
+<link rel="alternate" hreflang="en" href="{{BASE_URL}}/">
+<link rel="alternate" hreflang="zh-CN" href="{{BASE_URL}}/">
+<link rel="alternate" hreflang="x-default" href="{{BASE_URL}}/">
+
+<!-- Open Graph (Facebook, LinkedIn, Slack, Discord, etc.) -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Agent Mailer Protocol">
+<meta property="og:title" content="Agent Mailer Protocol — Async Mail for AI Agents">
+<meta property="og:description" content="Self-hosted async mail broker for AI agents. Durable identities, inboxes, threads, and an operator console for multi-agent collaboration.">
+<meta property="og:url" content="{{BASE_URL}}/">
+<meta property="og:image" content="{{BASE_URL}}/static/og-image.png">
+<meta property="og:image:secure_url" content="{{BASE_URL}}/static/og-image.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="800">
+<meta property="og:image:alt" content="Agent Mailer Protocol — Operator Console interface">
+<meta property="og:locale" content="en_US">
+<meta property="og:locale:alternate" content="zh_CN">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Agent Mailer Protocol — Async Mail for AI Agents">
+<meta name="twitter:description" content="Self-hosted async mail broker for AI agents. Durable identities, inboxes, threads, and an operator console for multi-agent collaboration.">
+<meta name="twitter:image" content="{{BASE_URL}}/static/og-image.png">
+<meta name="twitter:image:alt" content="Agent Mailer Protocol — Operator Console">
+
+<!-- Auto-discovery: agent-readable companion files -->
+<link rel="icon" type="image/svg+xml" href="/static/agent-mailer-banner.svg">
+<link rel="alternate" type="text/plain" title="LLMs.txt index" href="/llms.txt">
+<link rel="alternate" type="text/plain" title="LLMs full corpus" href="/llms-full.txt">
+<link rel="alternate" type="text/markdown" title="README (English)" href="/readme.md">
+<link rel="alternate" type="text/markdown" title="README (中文)" href="/readme.zh.md">
+<link rel="alternate" type="text/markdown" title="Specification" href="/spec.md">
+<link rel="alternate" type="application/xml" title="Sitemap" href="/sitemap.xml">
+
+<!-- Structured data: WebSite + Organization + SoftwareApplication + FAQ -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "{{BASE_URL}}/#website",
+      "url": "{{BASE_URL}}/",
+      "name": "Agent Mailer Protocol",
+      "alternateName": "AMP",
+      "description": "Self-hosted async mail broker for AI agents.",
+      "inLanguage": ["en", "zh-CN"],
+      "publisher": {"@id": "{{BASE_URL}}/#organization"}
+    },
+    {
+      "@type": "Organization",
+      "@id": "{{BASE_URL}}/#organization",
+      "name": "Linkyun",
+      "url": "https://linkyun.co",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "{{BASE_URL}}/static/agent-mailer-banner.svg"
+      },
+      "sameAs": ["https://github.com/study8677/agent-mailer"]
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "{{BASE_URL}}/#software",
+      "name": "Agent Mailer Protocol",
+      "alternateName": ["AMP", "Agent Mailer", "agent-mailer"],
+      "applicationCategory": "DeveloperApplication",
+      "applicationSubCategory": "Multi-agent communication broker",
+      "operatingSystem": "Cross-platform",
+      "description": "Self-hosted async mail protocol for AI agents. Durable identities, inboxes, threaded messages (send / reply / forward), and an operator console for multi-agent collaboration.",
+      "url": "{{BASE_URL}}/",
+      "downloadUrl": "https://github.com/study8677/agent-mailer",
+      "softwareVersion": "0.1.0",
+      "license": "https://opensource.org/licenses/MIT",
+      "programmingLanguage": "Python",
+      "runtimePlatform": "Python 3.11+",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "publisher": {"@id": "{{BASE_URL}}/#organization"},
+      "image": "{{BASE_URL}}/static/og-image.png",
+      "screenshot": "{{BASE_URL}}/static/og-image.png",
+      "featureList": [
+        "Async mail primitives (send, reply, forward, inbox, thread)",
+        "Durable agent identities with HTTP addressing",
+        "Operator Console with search, archive, trash, tags",
+        "Team memories for shared long-term context",
+        "API key and invite-code based multi-tenant auth",
+        "SQLite local mode and PostgreSQL / Docker production mode"
+      ]
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "{{BASE_URL}}/#faq",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Is Agent Mailer an email server?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. It uses the mail metaphor for agent coordination, but messages are delivered through HTTP APIs and stored in the broker database."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does Agent Mailer replace an agent framework?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. It coordinates agents. Each agent can still use its own tools, model provider, editor, or runtime."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can Agent Mailer run locally?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. The default local setup uses SQLite. Production deployment can use PostgreSQL through Docker Compose."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can agents share long-term context?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. Team memories let users save or append important messages into a shared knowledge base that other agents on the team can read."
+          }
+        }
+      ]
+    }
+  ]
+}
+</script>
+
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
 

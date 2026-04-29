@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from agent_mailer.db import init_db, get_db, DB_PATH
 from agent_mailer.bootstrap import ensure_bootstrap_invite_code
@@ -37,7 +37,20 @@ app.include_router(teams.router)
 app.include_router(memories.router)
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+SEO_DIR = STATIC_DIR / "seo"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+def _render_seo(name: str, base_url: str) -> str:
+    return (SEO_DIR / name).read_text(encoding="utf-8").replace("{{BASE_URL}}", base_url)
+
+
+def _read_project_doc(filename: str) -> str | None:
+    path = PROJECT_ROOT / filename
+    if path.is_file():
+        return path.read_text(encoding="utf-8")
+    return None
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -318,3 +331,83 @@ GET {base_url}/messages/thread/{{thread_id}}
 Headers: X-API-Key: <your_api_key>
 ```
 """
+
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+async def robots_txt(request: Request):
+    return _render_seo("robots.txt", get_base_url(request))
+
+
+@app.get("/sitemap.xml")
+async def sitemap_xml(request: Request):
+    body = _render_seo("sitemap.xml", get_base_url(request))
+    return Response(content=body, media_type="application/xml")
+
+
+@app.get("/llms.txt")
+async def llms_txt(request: Request):
+    body = _render_seo("llms.txt", get_base_url(request))
+    return Response(content=body, media_type="text/plain; charset=utf-8")
+
+
+@app.get("/llms-full.txt")
+async def llms_full_txt(request: Request):
+    base_url = get_base_url(request)
+    parts: list[str] = [
+        f"# Agent Mailer Protocol — Full Documentation Bundle\n\n",
+        f"> All public docs concatenated for context-window ingestion. Live instance: {base_url}\n\n",
+        f"> Generated on request from the canonical project README, README_CN, and SPEC files.\n",
+    ]
+    for label, filename in (
+        ("README.md (English)", "README.md"),
+        ("README_CN.md (中文)", "README_CN.md"),
+        ("SPEC.md", "SPEC.md"),
+    ):
+        content = _read_project_doc(filename)
+        if content:
+            parts.append(f"\n\n---\n\n# {label}\n\n")
+            parts.append(content)
+    if len(parts) <= 3:
+        body = _render_seo("llms-full.txt", base_url)
+    else:
+        body = "".join(parts).replace("{{BASE_URL}}", base_url)
+    return Response(content=body, media_type="text/plain; charset=utf-8")
+
+
+@app.get("/ai.txt", response_class=PlainTextResponse)
+async def ai_txt(request: Request):
+    return _render_seo("ai.txt", get_base_url(request))
+
+
+@app.get("/humans.txt", response_class=PlainTextResponse)
+async def humans_txt(request: Request):
+    return _render_seo("humans.txt", get_base_url(request))
+
+
+@app.get("/.well-known/ai-plugin.json")
+async def ai_plugin_json(request: Request):
+    body = _render_seo(".well-known/ai-plugin.json", get_base_url(request))
+    return Response(content=body, media_type="application/json")
+
+
+@app.get("/.well-known/security.txt", response_class=PlainTextResponse)
+async def security_txt(request: Request):
+    return _render_seo(".well-known/security.txt", get_base_url(request))
+
+
+@app.get("/readme.md")
+async def readme_md():
+    body = _read_project_doc("README.md") or "# README not available\n"
+    return Response(content=body, media_type="text/markdown; charset=utf-8")
+
+
+@app.get("/readme.zh.md")
+async def readme_zh_md():
+    body = _read_project_doc("README_CN.md") or "# README_CN not available\n"
+    return Response(content=body, media_type="text/markdown; charset=utf-8")
+
+
+@app.get("/spec.md")
+async def spec_md():
+    body = _read_project_doc("SPEC.md") or "# SPEC not available\n"
+    return Response(content=body, media_type="text/markdown; charset=utf-8")

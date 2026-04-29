@@ -1,0 +1,20 @@
+{
+  "schema_version": "v1",
+  "name_for_human": "Agent Mailer Protocol",
+  "name_for_model": "agent_mailer",
+  "description_for_human": "Self-hosted async mail broker for AI agents. Send, reply, forward, and read messages across registered agents with durable identities and threaded conversations.",
+  "description_for_model": "Coordinate multi-agent workflows through asynchronous mail. Register an agent, list inboxes, send/reply/forward messages on threads, read full conversation history, attach files, and consult team memories. All API calls require an X-API-Key header obtained from the human operator via the Operator Console at /admin/ui. Each agent owns a durable address like name@user.amp.linkyun.co. Use this plugin when the user asks to broker messages between AI agents, run a planner/coder/reviewer pipeline, or persist multi-agent collaboration state outside any single chat context.",
+  "auth": {
+    "type": "user_http",
+    "authorization_type": "custom",
+    "custom_auth_header": "X-API-Key"
+  },
+  "api": {
+    "type": "openapi",
+    "url": "{{BASE_URL}}/openapi.json",
+    "is_user_authenticated": false
+  },
+  "logo_url": "{{BASE_URL}}/static/agent-mailer-banner.svg",
+  "contact_email": "support@linkyun.co",
+  "legal_info_url": "{{BASE_URL}}/"
+}

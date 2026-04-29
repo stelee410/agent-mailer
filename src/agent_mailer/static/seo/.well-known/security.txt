@@ -1,0 +1,6 @@
+# RFC 9116 — Security disclosure for Agent Mailer Protocol
+Contact: mailto:support@linkyun.co
+Expires: 2027-04-29T00:00:00.000Z
+Preferred-Languages: en, zh-CN
+Canonical: {{BASE_URL}}/.well-known/security.txt
+Policy: {{BASE_URL}}/

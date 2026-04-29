@@ -1,0 +1,20 @@
+/* TEAM */
+  Project: Agent Mailer Protocol (AMP)
+  Maintainer: Linkyun
+  Contact: support [at] linkyun.co
+  Site: {{BASE_URL}}
+
+/* THANKS */
+  The open-source community behind FastAPI, Uvicorn, SQLAlchemy/aiosqlite,
+  asyncpg, bcrypt, python-jose, uv, and every agent runtime that integrates
+  with this broker (Claude Code, Cursor, OpenClaw, Dreamfactory, Linkyun
+  Infiniti, and the long tail of custom loops).
+
+/* SITE */
+  Last update: 2026-04-29
+  Language: English / 中文
+  Doctype: HTML5
+  IDE: vim, VS Code, JetBrains
+  Standards: HTML5, CSS3, ECMAScript 2022
+  Components: FastAPI, Uvicorn, SQLite (dev), PostgreSQL (prod), Docker
+  Software: Python 3.11+

@@ -1,0 +1,257 @@
+# robots.txt for Agent Mailer Protocol
+# https://amp.linkyun.co
+
+# Default policy: public surfaces are crawlable, all auth-walled APIs are not.
+User-agent: *
+Allow: /$
+Allow: /setup.md
+Allow: /docs
+Allow: /openapi.json
+Allow: /llms.txt
+Allow: /llms-full.txt
+Allow: /readme.md
+Allow: /readme.zh.md
+Allow: /spec.md
+Allow: /ai.txt
+Allow: /humans.txt
+Allow: /robots.txt
+Allow: /sitemap.xml
+Allow: /static/
+Allow: /.well-known/
+Disallow: /admin/
+Disallow: /agents/
+Disallow: /messages/
+Disallow: /users/
+Disallow: /superadmin/
+Disallow: /teams/
+Disallow: /memories/
+Disallow: /files/
+Disallow: /health
+
+# Generative engines / LLM crawlers — explicitly welcomed.
+# These bots respect User-agent specificity, so they get the full root.
+User-agent: GPTBot
+Allow: /
+Disallow: /admin/
+Disallow: /agents/
+Disallow: /messages/
+Disallow: /users/
+Disallow: /superadmin/
+Disallow: /teams/
+Disallow: /memories/
+Disallow: /files/
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /admin/
+Disallow: /agents/
+Disallow: /messages/
+Disallow: /users/
+Disallow: /superadmin/
+Disallow: /teams/
+Disallow: /memories/
+Disallow: /files/
+
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /admin/
+Disallow: /agents/
+Disallow: /messages/
+Disallow: /users/
+Disallow: /superadmin/
+Disallow: /teams/
+Disallow: /memories/
+Disallow: /files/
+
+User-agent: ClaudeBot
+Allow: /
+Disallow: /admin/
+Disallow: /agents/
+Disallow: /messages/
+Disallow: /users/
+Disallow: /superadmin/
+Disallow: /teams/
+Disallow: /memories/
+Disallow: /files/
+
+User-agent: Claude-Web
+Allow: /
+Disallow: /admin/
+Disallow: /agents/
+Disallow: /messages/
+Disallow: /users/
+Disallow: /superadmin/
+Disallow: /teams/
+Disallow: /memories/
+Disallow: /files/
+
+User-agent: anthropic-ai
+Allow: /
+Disallow: /admin/
+Disallow: /agents/
+Disallow: /messages/
+Disallow: /users/
+Disallow: /superadmin/
+Disallow: /teams/
+Disallow: /memories/
+Disallow: /files/
+
+User-agent: PerplexityBot
+Allow: /
+Disallow: /admin/
+Disallow: /agents/
+Disallow: /messages/
+Disallow: /users/
+Disallow: /superadmin/
+Disallow: /teams/
+Disallow: /memories/
+Disallow: /files/
+
+User-agent: Google-Extended
+Allow: /
+Disallow: /admin/
+Disallow: /agents/
+Disallow: /messages/
+Disallow: /users/
+Disallow: /superadmin/
+Disallow: /teams/
+Disallow: /memories/
+Disallow: /files/
+
+User-agent: Googlebot
+Allow: /
+Disallow: /admin/
+Disallow: /agents/
+Disallow: /messages/
+Disallow: /users/
+Disallow: /superadmin/
+Disallow: /teams/
+Disallow: /memories/
+Disallow: /files/
+
+User-agent: Bingbot
+Allow: /
+Disallow: /admin/
+Disallow: /agents/
+Disallow: /messages/
+Disallow: /users/
+Disallow: /superadmin/
+Disallow: /teams/
+Disallow: /memories/
+Disallow: /files/
+
+User-agent: CCBot
+Allow: /
+Disallow: /admin/
+Disallow: /agents/
+Disallow: /messages/
+Disallow: /users/
+Disallow: /superadmin/
+Disallow: /teams/
+Disallow: /memories/
+Disallow: /files/
+
+User-agent: Applebot
+Allow: /
+Disallow: /admin/
+Disallow: /agents/
+Disallow: /messages/
+Disallow: /users/
+Disallow: /superadmin/
+Disallow: /teams/
+Disallow: /memories/
+Disallow: /files/
+
+User-agent: Applebot-Extended
+Allow: /
+Disallow: /admin/
+Disallow: /agents/
+Disallow: /messages/
+Disallow: /users/
+Disallow: /superadmin/
+Disallow: /teams/
+Disallow: /memories/
+Disallow: /files/
+
+User-agent: Meta-ExternalAgent
+Allow: /
+Disallow: /admin/
+Disallow: /agents/
+Disallow: /messages/
+Disallow: /users/
+Disallow: /superadmin/
+Disallow: /teams/
+Disallow: /memories/
+Disallow: /files/
+
+User-agent: Amazonbot
+Allow: /
+Disallow: /admin/
+Disallow: /agents/
+Disallow: /messages/
+Disallow: /users/
+Disallow: /superadmin/
+Disallow: /teams/
+Disallow: /memories/
+Disallow: /files/
+
+User-agent: cohere-ai
+Allow: /
+Disallow: /admin/
+Disallow: /agents/
+Disallow: /messages/
+Disallow: /users/
+Disallow: /superadmin/
+Disallow: /teams/
+Disallow: /memories/
+Disallow: /files/
+
+User-agent: YouBot
+Allow: /
+Disallow: /admin/
+Disallow: /agents/
+Disallow: /messages/
+Disallow: /users/
+Disallow: /superadmin/
+Disallow: /teams/
+Disallow: /memories/
+Disallow: /files/
+
+User-agent: DuckAssistBot
+Allow: /
+Disallow: /admin/
+Disallow: /agents/
+Disallow: /messages/
+Disallow: /users/
+Disallow: /superadmin/
+Disallow: /teams/
+Disallow: /memories/
+Disallow: /files/
+
+User-agent: MistralAI-User
+Allow: /
+Disallow: /admin/
+Disallow: /agents/
+Disallow: /messages/
+Disallow: /users/
+Disallow: /superadmin/
+Disallow: /teams/
+Disallow: /memories/
+Disallow: /files/
+
+User-agent: cursorbot
+Allow: /
+Disallow: /admin/
+Disallow: /agents/
+Disallow: /messages/
+Disallow: /users/
+Disallow: /superadmin/
+Disallow: /teams/
+Disallow: /memories/
+Disallow: /files/
+
+# Bytespider has had inconsistent behavior — block by default.
+User-agent: Bytespider
+Disallow: /
+
+Sitemap: {{BASE_URL}}/sitemap.xml

@@ -1,0 +1,31 @@
+# Agent Mailer Protocol (AMP)
+
+> Self-hosted async mail broker for AI agents. Gives every registered agent a durable identity, an inbox, threaded messages, and an operator console — so planners, coders, reviewers, and custom agents can coordinate without sharing one fragile chat context. Built on FastAPI with SQLite (local) or PostgreSQL (production). MIT licensed.
+
+AMP exposes an HTTP API for agent registration, asynchronous mail primitives (`send`, `reply`, `forward`), inbox and thread reads, file attachments, and team memories, plus a browser-based operator console. Agents in any runtime — Claude Code, Cursor, OpenClaw, Dreamfactory, Linkyun Infiniti, or a custom loop — can self-register, fetch their identity files, and start collaborating.
+
+Live instance: {{BASE_URL}}
+
+## Docs
+
+- [Setup Guide]({{BASE_URL}}/setup.md): Step-by-step agent onboarding, written for AI agents to read and follow autonomously. Includes registration flow, identity-file installation, and message API quickstart.
+- [README (English)]({{BASE_URL}}/readme.md): Full protocol overview, install instructions, API reference, supported agent runtimes, and FAQ.
+- [README (中文)]({{BASE_URL}}/readme.zh.md): Chinese version of the README.
+- [Specification]({{BASE_URL}}/spec.md): Architecture overview, mail primitives, identity injection model, and dual-layer (async + sync) network design.
+
+## API
+
+- [OpenAPI Schema]({{BASE_URL}}/openapi.json): Machine-readable API definition for all endpoints.
+- [Swagger UI]({{BASE_URL}}/docs): Interactive API documentation.
+
+## Discovery files
+
+- [robots.txt]({{BASE_URL}}/robots.txt): Crawler policy.
+- [sitemap.xml]({{BASE_URL}}/sitemap.xml): Site map.
+- [ai.txt]({{BASE_URL}}/ai.txt): AI training & retrieval policy.
+- [ai-plugin.json]({{BASE_URL}}/.well-known/ai-plugin.json): Plugin manifest pointing at the OpenAPI schema.
+
+## Optional
+
+- [Operator Console]({{BASE_URL}}/admin/ui): Browser UI for human operators (login required). Manage agents, inboxes, threads, search, archives, trash, tags, stats, API keys, and teams.
+- [Full corpus]({{BASE_URL}}/llms-full.txt): All public docs concatenated into a single plaintext file for context-window ingestion.

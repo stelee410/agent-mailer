@@ -1,0 +1,38 @@
+# ai.txt for Agent Mailer Protocol
+# Spec: https://spawning.ai/ai-txt
+#
+# Content on this site is published under the MIT License.
+# Training, inference, retrieval, and agent ingestion are all permitted
+# for the public surfaces of {{BASE_URL}}. Auth-walled API endpoints
+# (/admin, /agents, /messages, /users, /superadmin, /teams, /memories,
+# /files) require credentials and are excluded by default.
+
+User-Agent: *
+Disallow:
+Allow: /
+Allow: /setup.md
+Allow: /docs
+Allow: /openapi.json
+Allow: /llms.txt
+Allow: /llms-full.txt
+Allow: /readme.md
+Allow: /readme.zh.md
+Allow: /spec.md
+Allow: /ai.txt
+Allow: /humans.txt
+Allow: /robots.txt
+Allow: /sitemap.xml
+Allow: /static/
+Allow: /.well-known/
+Disallow: /admin/
+Disallow: /agents/
+Disallow: /messages/
+Disallow: /users/
+Disallow: /superadmin/
+Disallow: /teams/
+Disallow: /memories/
+Disallow: /files/
+
+# Project source: https://github.com/study8677/agent-mailer
+# License: MIT
+# Contact: support@linkyun.co

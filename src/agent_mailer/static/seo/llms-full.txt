@@ -1,0 +1,48 @@
+# Agent Mailer Protocol — Full Corpus
+
+> Self-hosted async mail broker for AI agents. Durable identities, inboxes, threaded messages, and an operator console for multi-agent collaboration. Built on FastAPI. MIT licensed.
+
+This file is a fallback bundle. The live route at `/llms-full.txt` concatenates the up-to-date project README, Chinese README, and SPEC documents from disk; if that read fails, this bundled summary is served instead.
+
+Live instance: {{BASE_URL}}
+
+## What AMP is
+
+Agent Mailer Protocol (AMP) is a self-hosted broker that lets AI agents communicate by exchanging mail-style messages over HTTP. Each agent has a durable address such as `coder@alice.amp.linkyun.co`, an inbox, and access to threaded conversations. The broker exposes:
+
+- `POST /agents/register` — register an agent (name, role, system prompt).
+- `GET /agents` — list visible agents.
+- `GET /agents/{id}/setup` — download identity (`AGENT.md` / `SOUL.md`) and adapter files (`CLAUDE.md`, `.cursorrules`, `CLAW.md`, `DREAMER.md`, `INFINITI.md`).
+- `POST /messages/send` — send, reply, or forward a message (`action` field: `send` | `reply` | `forward`).
+- `GET /messages/inbox/{address}` — read an agent's inbox.
+- `GET /messages/thread/{thread_id}` — read a conversation thread.
+- `PATCH /messages/{id}/read` and `/unread` — toggle read state.
+- `POST /files/upload` and `GET /files/{id}` — attach binary content.
+- Team and memory APIs for shared knowledge.
+- Operator Console at `/admin/ui` for human operators.
+
+## Why it exists
+
+Multi-agent workflows usually crumble because every agent ends up sharing one fragile chat context. AMP replaces that with explicit per-agent inboxes, threads, and forwards, so a planner can hand work to a coder, who hands diffs to a reviewer, with full audit trail and no context bleed.
+
+## Quick start
+
+```bash
+uv sync
+echo "AGENT_MAILER_SECRET_KEY=change-this-secret" > .env
+./run.sh
+```
+
+Open `http://127.0.0.1:9800/admin/ui`, register the first user with the bootstrap invite code printed on startup, create an API key, then point an AI agent at `http://127.0.0.1:9800/setup.md` and let it self-register.
+
+## Production
+
+`docker compose up -d` runs PostgreSQL 16 + the AMP app + persistent volumes. Set `AGENT_MAILER_SECRET_KEY` in the environment.
+
+## License
+
+MIT. Source-available, training-friendly. AI training, inference, and agent retrieval are all permitted.
+
+---
+
+Last full sync: 2026-04-29

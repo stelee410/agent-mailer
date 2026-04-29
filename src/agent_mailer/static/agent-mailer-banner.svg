@@ -1,0 +1,75 @@
+<svg width="1200" height="520" viewBox="0 0 1200 520" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Agent Mailer Protocol</title>
+  <desc id="desc">A visual banner showing AI agents connected by asynchronous inbox messages.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="520" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#10111f"/>
+      <stop offset="0.48" stop-color="#181332"/>
+      <stop offset="1" stop-color="#0c1726"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="216" y1="160" x2="970" y2="359" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8b5cf6"/>
+      <stop offset="0.55" stop-color="#22c55e"/>
+      <stop offset="1" stop-color="#38bdf8"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="520" rx="42" fill="url(#bg)"/>
+  <g opacity="0.15">
+    <path d="M80 96H1120" stroke="#ffffff"/>
+    <path d="M80 176H1120" stroke="#ffffff"/>
+    <path d="M80 256H1120" stroke="#ffffff"/>
+    <path d="M80 336H1120" stroke="#ffffff"/>
+    <path d="M80 416H1120" stroke="#ffffff"/>
+    <path d="M160 56V464" stroke="#ffffff"/>
+    <path d="M280 56V464" stroke="#ffffff"/>
+    <path d="M400 56V464" stroke="#ffffff"/>
+    <path d="M520 56V464" stroke="#ffffff"/>
+    <path d="M640 56V464" stroke="#ffffff"/>
+    <path d="M760 56V464" stroke="#ffffff"/>
+    <path d="M880 56V464" stroke="#ffffff"/>
+    <path d="M1000 56V464" stroke="#ffffff"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="86" y="78" width="1028" height="364" rx="32" fill="#f8fafc"/>
+    <rect x="86" y="78" width="1028" height="364" rx="32" stroke="#dbe1ea" stroke-width="2"/>
+    <rect x="86" y="78" width="1028" height="58" rx="32" fill="#eef2f7"/>
+    <path d="M86 136H1114" stroke="#dbe1ea" stroke-width="2"/>
+    <circle cx="132" cy="107" r="9" fill="#ef4444"/>
+    <circle cx="160" cy="107" r="9" fill="#f59e0b"/>
+    <circle cx="188" cy="107" r="9" fill="#22c55e"/>
+    <text x="244" y="114" fill="#64748b" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="700" letter-spacing="3">AGENT MAILER PROTOCOL</text>
+  </g>
+
+  <g>
+    <path d="M315 302C397 190 501 187 584 260C673 339 781 342 899 214" stroke="url(#accent)" stroke-width="8" stroke-linecap="round"/>
+    <path d="M875 211L902 211L899 238" stroke="#38bdf8" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="178" y="188" width="214" height="126" rx="22" fill="#ffffff" stroke="#dbe1ea" stroke-width="2"/>
+    <text x="220" y="225" fill="#0f172a" font-family="Inter, Arial, sans-serif" font-size="27" font-weight="800">Planner</text>
+    <text x="220" y="254" fill="#64748b" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="600">inbox ready</text>
+    <path d="M326 263H348V297H222V263H244" stroke="#8b5cf6" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M226 267L285 291L344 267" stroke="#8b5cf6" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <rect x="493" y="188" width="214" height="126" rx="22" fill="#ffffff" stroke="#dbe1ea" stroke-width="2"/>
+    <text x="535" y="225" fill="#0f172a" font-family="Inter, Arial, sans-serif" font-size="27" font-weight="800">Coder</text>
+    <text x="535" y="254" fill="#64748b" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="600">threaded work</text>
+    <path d="M641 263H663V297H537V263H559" stroke="#22c55e" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M541 267L600 291L659 267" stroke="#22c55e" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <rect x="808" y="188" width="214" height="126" rx="22" fill="#ffffff" stroke="#dbe1ea" stroke-width="2"/>
+    <text x="850" y="225" fill="#0f172a" font-family="Inter, Arial, sans-serif" font-size="27" font-weight="800">Reviewer</text>
+    <text x="850" y="254" fill="#64748b" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="600">reply loop</text>
+    <path d="M956 263H978V297H852V263H874" stroke="#38bdf8" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M856 267L915 291L974 267" stroke="#38bdf8" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <text x="600" y="371" fill="#0f172a" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="44" font-weight="900">Durable inboxes for AI agents</text>
+  <text x="600" y="409" fill="#64748b" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="700">send . reply . forward . coordinate</text>
+</svg>
