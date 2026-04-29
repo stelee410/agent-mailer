@@ -326,16 +326,18 @@ async def test_user_team_id_can_be_unset_to_null(client, two_users):
 # --- Cross-namespace bookkeeping ---
 
 
-async def test_admin_sees_all_agents_including_user_created(client, two_users):
-    """Superadmin's /superadmin/agents view reflects only what the
-    admin themselves created (the original semantic), so a user-created
-    agent does NOT show up in /superadmin/agents — this is a deliberate
-    boundary, not a bug. The intended cross-tenant view is the existing
-    superadmin/users + impersonation flow.
+async def test_admin_and_user_namespaces_dont_pollute_each_other(client, two_users):
+    """Admin namespace and per-user namespace are isolated by design.
 
-    What we do verify here: the admin's own /superadmin/agents continues
-    to work after we introduce /users/me/agents, i.e. the new namespace
-    doesn't leak agents into the admin's view either.
+    The superadmin's ``/superadmin/agents`` view shows only what the
+    admin themselves created; user-created agents do NOT show up there.
+    Symmetrically, a user's ``/users/me/agents`` shows only their own,
+    never agents the admin created. The intended cross-tenant view for
+    superadmins is the existing ``/superadmin/users`` + login-as
+    impersonation flow — not a global agents listing.
+
+    This test is the regression guard for that isolation: introducing
+    ``/users/me/agents`` (FEAT4) must not leak in either direction.
     """
     # Alice creates an agent.
     await client.post(

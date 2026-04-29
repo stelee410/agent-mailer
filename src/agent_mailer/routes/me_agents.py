@@ -309,8 +309,10 @@ async def update_my_agent(
 
     if fields:
         params.append(agent_id)
-        await db.execute(f"UPDATE agents SET {', '.join(fields)} WHERE id = ?", tuple(params))
-        await db.commit()
+        async with db_transaction(db):
+            await db.execute(
+                f"UPDATE agents SET {', '.join(fields)} WHERE id = ?", tuple(params)
+            )
 
     cursor = await db.execute("SELECT * FROM agents WHERE id = ?", (agent_id,))
     return _agent_to_response(await cursor.fetchone())
