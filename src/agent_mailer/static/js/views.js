@@ -1717,16 +1717,19 @@ async function renderAdmin() {
   const main = document.getElementById('main');
   main.innerHTML = `<div class="empty">${esc(t('common.loading'))}</div>`;
 
-  let users = [], inviteCodes = [];
+  let users = [], inviteCodes = [], settings = { invite_required: true }, adminAgents = [];
   try {
-    [users, inviteCodes] = await Promise.all([
+    [users, inviteCodes, settings, adminAgents] = await Promise.all([
       api('/superadmin/users'),
       api('/superadmin/invite-codes'),
+      api('/superadmin/settings'),
+      api('/superadmin/agents'),
     ]);
   } catch (e) {
     main.innerHTML = `<div class="card"><p class="empty">${esc(t('admin.loadFailed', { msg: e.message }))}</p></div>`;
     return;
   }
+  window._adminAgentsCache = adminAgents;
 
   const usersHtml = users.length === 0
     ? `<div class="empty" style="padding:16px 0">${esc(t('admin.noUsers'))}</div>`
@@ -1759,9 +1762,39 @@ async function renderAdmin() {
         </tbody>
       </table>`;
 
+  const inviteRequired = !!settings.invite_required;
+  const settingsHtml = `
+    <div class="admin-section">
+      <h3>${esc(t('admin.settings'))}</h3>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="settingInviteRequired" ${inviteRequired ? 'checked' : ''} onchange="toggleInviteRequired(this)">
+          <span>${esc(t('admin.settingInviteRequired'))}</span>
+        </label>
+        <span id="settingsStatus" style="font-size:13px"></span>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-top:6px">${esc(t('admin.settingInviteRequiredHint'))}</div>
+    </div>`;
+
+  const agentsHtml = renderAdminAgentsSection(adminAgents);
+
   main.innerHTML = `
     <div class="card">
       <h2>${esc(t('admin.title'))}</h2>
+
+      ${settingsHtml}
+
+      <div class="admin-section">
+        <h3>${esc(t('admin.agentsTitle'))}</h3>
+        <div style="margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="openCreateAdminAgent()">+ ${esc(t('admin.agentsNew'))}</button>
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)">
+            <input type="checkbox" id="agentsIncludeDeleted" onchange="reloadAdminAgents()"> ${esc(t('admin.agentsShowDeleted'))}
+          </label>
+          <span id="adminAgentsStatus" style="font-size:13px"></span>
+        </div>
+        <div id="adminAgentsTable">${agentsHtml}</div>
+      </div>
 
       <div class="admin-section">
         <h3>${esc(t('admin.users'))}</h3>
@@ -1777,6 +1810,454 @@ async function renderAdmin() {
         <div id="inviteCodesTable">${codesHtml}</div>
       </div>
     </div>`;
+}
+
+
+// --- Admin Agents (managed agents) ---
+
+function renderAdminAgentsSection(agents) {
+  if (!agents || agents.length === 0) {
+    return `<div class="empty" style="padding:16px 0">${esc(t('admin.agentsEmpty'))}</div>`;
+  }
+  return `<table class="admin-table">
+    <thead><tr>
+      <th>${esc(t('admin.agentsColName'))}</th>
+      <th>${esc(t('admin.agentsColRole'))}</th>
+      <th>${esc(t('admin.agentsColAddress'))}</th>
+      <th>${esc(t('admin.agentsColApiKey'))}</th>
+      <th>${esc(t('admin.agentsColStatus'))}</th>
+      <th>${esc(t('admin.colCreated'))}</th>
+      <th>${esc(t('admin.colAction'))}</th>
+    </tr></thead>
+    <tbody>
+      ${agents.map(a => `
+        <tr${(a.status === 'deleted') ? ' style="opacity:0.5"' : ''}>
+          <td><strong>${esc(a.name)}</strong></td>
+          <td>${esc(a.role || '')}</td>
+          <td class="invite-code-mono">${esc(a.address)}</td>
+          <td class="invite-code-mono">${esc(a.api_key_masked || '')}</td>
+          <td>${a.status === 'deleted' ? `<span style="color:var(--danger);font-size:12px">${esc(t('admin.agentsStatusDeleted'))}</span>` : `<span style="color:var(--success);font-size:12px">${esc(t('admin.agentsStatusActive'))}</span>`}</td>
+          <td style="color:var(--muted);font-size:12px">${esc(fmtTime(a.created_at))}</td>
+          <td>
+            ${a.status === 'deleted'
+              ? `<span style="color:var(--muted);font-size:12px">—</span>`
+              : `
+                <button class="btn-sm" onclick="openEditAdminAgent('${esc(a.id)}')">${esc(t('admin.agentsEdit'))}</button>
+                <button class="btn-sm" onclick="regenerateAdminAgentKey('${esc(a.id)}', '${esc(a.name)}')">${esc(t('admin.agentsRegen'))}</button>
+                <button class="btn-sm" onclick="exportAdminAgentMd('${esc(a.id)}', '${esc(a.name)}', 'agent_md')">AGENT.md</button>
+                <button class="btn-sm" onclick="exportAdminAgentMd('${esc(a.id)}', '${esc(a.name)}', 'soul_md')">SOUL.md</button>
+                <button class="btn-sm" onclick="deleteAdminAgent('${esc(a.id)}', '${esc(a.name)}')">${esc(t('admin.agentsDelete'))}</button>
+              `}
+          </td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>`;
+}
+
+async function reloadAdminAgents() {
+  const tableEl = document.getElementById('adminAgentsTable');
+  const includeDeleted = !!document.getElementById('agentsIncludeDeleted')?.checked;
+  if (!tableEl) return;
+  try {
+    const list = await api('/superadmin/agents' + (includeDeleted ? '?include_deleted=true' : ''));
+    window._adminAgentsCache = list;
+    tableEl.innerHTML = renderAdminAgentsSection(list);
+  } catch (e) {
+    tableEl.innerHTML = `<div class="empty" style="padding:16px 0;color:var(--danger)">${esc(t('common.errorPrefix'))}${esc(e.message)}</div>`;
+  }
+}
+
+function _adminAgentsModal(html) {
+  let overlay = document.getElementById('adminAgentModal');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'adminAgentModal';
+    overlay.className = 'modal-overlay';
+    overlay.style.display = 'flex';
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) closeAdminAgentModal(); });
+    document.body.appendChild(overlay);
+  } else {
+    overlay.style.display = 'flex';
+  }
+  overlay.innerHTML = `<div class="compose-modal-box">
+    <button class="compose-modal-close" onclick="closeAdminAgentModal()">&times;</button>
+    ${html}
+  </div>`;
+  return overlay;
+}
+
+function closeAdminAgentModal() {
+  const o = document.getElementById('adminAgentModal');
+  if (o) { o.style.display = 'none'; o.innerHTML = ''; }
+}
+
+async function _fetchTeamOptions(selectedId) {
+  let teams = [];
+  try {
+    teams = await api('/admin/teams');
+  } catch (e) {
+    return `<option value="">${esc(t('admin.agentsTeamLoadFailed'))}</option>`;
+  }
+  const opts = [`<option value="">${esc(t('admin.agentsTeamNone'))}</option>`];
+  for (const team of teams) {
+    const sel = (team.id === selectedId) ? ' selected' : '';
+    opts.push(`<option value="${esc(team.id)}"${sel}>${esc(team.name)}</option>`);
+  }
+  return opts.join('');
+}
+
+async function openCreateAdminAgent() {
+  const teamOpts = await _fetchTeamOptions(null);
+  _adminAgentsModal(`
+    <h3 style="margin-top:0">${esc(t('admin.agentsNewTitle'))}</h3>
+    <div class="login-form">
+      <div>
+        <label>${esc(t('admin.agentsFieldName'))} *</label>
+        <input type="text" id="aaName" placeholder="pm">
+      </div>
+      <div>
+        <label>${esc(t('admin.agentsFieldAddress'))}</label>
+        <div style="display:flex;align-items:center;gap:6px">
+          <input type="text" id="aaAddrLocal" placeholder="${esc(t('admin.agentsAddressDefault'))}" style="flex:1">
+          <span style="color:var(--muted);font-size:13px">@admin.amp.linkyun.co</span>
+        </div>
+      </div>
+      <div>
+        <label>${esc(t('admin.agentsFieldRole'))}</label>
+        <input type="text" id="aaRole" placeholder="coder / pm / reviewer / ...">
+      </div>
+      <div>
+        <label>${esc(t('admin.agentsFieldDescription'))}</label>
+        <input type="text" id="aaDescription">
+      </div>
+      <div>
+        <label>${esc(t('admin.agentsFieldSystemPrompt'))}</label>
+        <textarea id="aaSystemPrompt" rows="6" style="width:100%;font-family:var(--mono,monospace);font-size:13px"></textarea>
+      </div>
+      <div>
+        <label>${esc(t('admin.agentsFieldTags'))}</label>
+        <input type="text" id="aaTags" placeholder="${esc(t('admin.agentsTagsHint'))}">
+      </div>
+      <div>
+        <label>${esc(t('admin.agentsFieldTeam'))}</label>
+        <select id="aaTeamId" style="width:100%">${teamOpts}</select>
+      </div>
+      <div id="aaError" class="login-error" style="display:none"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="modal-cancel" onclick="closeAdminAgentModal()">${esc(t('common.cancel'))}</button>
+        <button class="login-btn" id="aaSubmit" onclick="submitCreateAdminAgent()">${esc(t('common.create'))}</button>
+      </div>
+    </div>
+  `);
+}
+
+async function submitCreateAdminAgent() {
+  const errEl = document.getElementById('aaError');
+  const btn = document.getElementById('aaSubmit');
+  errEl.style.display = 'none';
+  const name = document.getElementById('aaName').value.trim();
+  if (!name) { errEl.textContent = t('admin.agentsErrorName'); errEl.style.display = ''; return; }
+  const local = document.getElementById('aaAddrLocal').value.trim();
+  const tagsRaw = document.getElementById('aaTags').value.trim();
+  const tags = tagsRaw ? tagsRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const teamId = document.getElementById('aaTeamId')?.value || '';
+  btn.disabled = true;
+  try {
+    const created = await api('/superadmin/agents', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        address_local: local || null,
+        role: document.getElementById('aaRole').value.trim(),
+        description: document.getElementById('aaDescription').value.trim(),
+        system_prompt: document.getElementById('aaSystemPrompt').value,
+        tags,
+        team_id: teamId,
+      }),
+    });
+    closeAdminAgentModal();
+    showAdminAgentApiKey(created.api_key_plaintext, created.name, t('admin.agentsKeyCreatedTitle'));
+    await reloadAdminAgents();
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = '';
+    btn.disabled = false;
+  }
+}
+
+async function openEditAdminAgent(agentId) {
+  const agent = (window._adminAgentsCache || []).find(a => a.id === agentId);
+  if (!agent) return;
+  const teamOpts = await _fetchTeamOptions(agent.team_id);
+  _adminAgentsModal(`
+    <h3 style="margin-top:0">${esc(t('admin.agentsEditTitle', { name: agent.name }))}</h3>
+    <div class="login-form">
+      <div>
+        <label>${esc(t('admin.agentsFieldAddress'))}</label>
+        <input type="text" value="${esc(agent.address)}" disabled style="opacity:0.7">
+      </div>
+      <div>
+        <label>${esc(t('admin.agentsFieldRole'))}</label>
+        <input type="text" id="aaRole" value="${esc(agent.role || '')}">
+      </div>
+      <div>
+        <label>${esc(t('admin.agentsFieldDescription'))}</label>
+        <input type="text" id="aaDescription" value="${esc(agent.description || '')}">
+      </div>
+      <div>
+        <label>${esc(t('admin.agentsFieldSystemPrompt'))}</label>
+        <textarea id="aaSystemPrompt" rows="8" style="width:100%;font-family:var(--mono,monospace);font-size:13px">${esc(agent.system_prompt || '')}</textarea>
+      </div>
+      <div>
+        <label>${esc(t('admin.agentsFieldTags'))}</label>
+        <input type="text" id="aaTags" value="${esc((agent.tags || []).join(', '))}">
+      </div>
+      <div>
+        <label>${esc(t('admin.agentsFieldTeam'))}</label>
+        <select id="aaTeamId" style="width:100%">${teamOpts}</select>
+      </div>
+      <div id="aaError" class="login-error" style="display:none"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="modal-cancel" onclick="closeAdminAgentModal()">${esc(t('common.cancel'))}</button>
+        <button class="login-btn" id="aaSubmit" onclick="submitEditAdminAgent('${esc(agentId)}')">${esc(t('common.save'))}</button>
+      </div>
+    </div>
+  `);
+}
+
+async function submitEditAdminAgent(agentId) {
+  const errEl = document.getElementById('aaError');
+  const btn = document.getElementById('aaSubmit');
+  errEl.style.display = 'none';
+  btn.disabled = true;
+  const tagsRaw = document.getElementById('aaTags').value.trim();
+  const tags = tagsRaw ? tagsRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const teamId = document.getElementById('aaTeamId')?.value || '';
+  try {
+    await api(`/superadmin/agents/${encodeURIComponent(agentId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        role: document.getElementById('aaRole').value.trim(),
+        description: document.getElementById('aaDescription').value.trim(),
+        system_prompt: document.getElementById('aaSystemPrompt').value,
+        tags,
+        team_id: teamId,
+      }),
+    });
+    closeAdminAgentModal();
+    await reloadAdminAgents();
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = '';
+    btn.disabled = false;
+  }
+}
+
+async function deleteAdminAgent(agentId, name) {
+  const ok = await showConfirm(
+    t('admin.agentsDeleteTitle'),
+    t('admin.agentsDeleteConfirm', { name }),
+    t('common.confirm'),
+  );
+  if (!ok) return;
+  try {
+    await api(`/superadmin/agents/${encodeURIComponent(agentId)}`, { method: 'DELETE' });
+    await reloadAdminAgents();
+  } catch (e) {
+    alert(t('common.failedPrefix') + e.message);
+  }
+}
+
+async function regenerateAdminAgentKey(agentId, name) {
+  const ok = await showConfirm(
+    t('admin.agentsRegenTitle'),
+    t('admin.agentsRegenConfirm', { name }),
+    t('common.confirm'),
+  );
+  if (!ok) return;
+  try {
+    const result = await api(`/superadmin/agents/${encodeURIComponent(agentId)}/regenerate-key`, { method: 'POST' });
+    showAdminAgentApiKey(result.api_key_plaintext, name, t('admin.agentsKeyRegenTitle'));
+    await reloadAdminAgents();
+  } catch (e) {
+    alert(t('common.failedPrefix') + e.message);
+  }
+}
+
+function showAdminAgentApiKey(rawKey, name, title) {
+  // Cache plaintext briefly so subsequent export-while-modal-open can embed it.
+  window._adminAgentLastKey = { name, key: rawKey, ts: Date.now() };
+  _adminAgentsModal(`
+    <h3 style="margin-top:0">${esc(title)} — ${esc(name)}</h3>
+    <p style="color:var(--danger);font-size:13px">${esc(t('admin.agentsKeyOnceWarn'))}</p>
+    <div class="step-code" style="user-select:all;word-break:break-all;font-size:13px">${esc(rawKey)}</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button class="login-btn" onclick="copyText(${JSON.stringify(rawKey)}); this.textContent='${esc(t('splash.copied'))}'">${esc(t('splash.copy'))}</button>
+      <button class="modal-cancel" onclick="forgetAdminAgentLastKey(); closeAdminAgentModal()">${esc(t('common.confirm'))}</button>
+    </div>
+  `);
+}
+
+function forgetAdminAgentLastKey() {
+  window._adminAgentLastKey = null;
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).catch(() => {});
+}
+
+function downloadTextAs(filename, content) {
+  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 0);
+}
+
+function _renderExportModal({ agentId, name, format, filename, content, hasFreshKey }) {
+  // Buttons are wired with addEventListener instead of inline onclick so the
+  // markdown payload (which carries embedded `"` and `'` from the protocol
+  // section + security note) cannot break out of the HTML attribute and
+  // silently disable Copy / Download — that class of bug bit us once already.
+  const hint = hasFreshKey
+    ? t('admin.agentsExportHintWithKey')
+    : t('admin.agentsExportHint');
+  _adminAgentsModal(`
+    <h3 style="margin-top:0">${esc(filename)} — ${esc(name)}</h3>
+    <p style="font-size:12px;color:var(--muted)">${esc(hint)}</p>
+    <textarea readonly rows="20" style="width:100%;font-family:var(--mono,monospace);font-size:12px">${esc(content)}</textarea>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap">
+      <button id="aaExportCopyBtn" class="login-btn">${esc(t('splash.copy'))}</button>
+      <button id="aaExportDownloadBtn" class="login-btn">${esc(t('admin.agentsExportDownloadPlaceholder'))}</button>
+      <button id="aaExportRegenBtn" class="login-btn" style="background:var(--danger,#c0392b);color:#fff">${esc(t('admin.agentsExportRegenAndDownload'))}</button>
+      <button id="aaExportCloseBtn" class="modal-cancel">${esc(t('common.confirm'))}</button>
+    </div>
+  `);
+  const copyBtn = document.getElementById('aaExportCopyBtn');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', () => {
+      copyText(content);
+      copyBtn.textContent = t('splash.copied');
+    });
+  }
+  const downloadBtn = document.getElementById('aaExportDownloadBtn');
+  if (downloadBtn) {
+    downloadBtn.addEventListener('click', () => downloadTextAs(filename, content));
+  }
+  const regenBtn = document.getElementById('aaExportRegenBtn');
+  if (regenBtn) {
+    regenBtn.addEventListener('click', () => regenAndDownloadAdminAgentMd(agentId, name, format, filename));
+  }
+  const closeBtn = document.getElementById('aaExportCloseBtn');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', closeAdminAgentModal);
+  }
+}
+
+async function exportAdminAgentMd(agentId, name, format) {
+  try {
+    const result = await api(`/superadmin/agents/${encodeURIComponent(agentId)}/export?format=${encodeURIComponent(format)}`);
+    let content = result.content;
+    let hasFreshKey = false;
+    const last = window._adminAgentLastKey;
+    if (last && last.name === name && (Date.now() - last.ts) < 5 * 60 * 1000) {
+      content = content.split('<your_api_key>').join(last.key);
+      hasFreshKey = true;
+    }
+    _renderExportModal({
+      agentId, name, format, filename: result.filename, content, hasFreshKey,
+    });
+  } catch (e) {
+    alert(t('common.failedPrefix') + e.message);
+  }
+}
+
+async function regenAndDownloadAdminAgentMd(agentId, name, format, filename) {
+  // Close the Export Modal before showing the confirm dialog. The two share
+  // a `.modal-overlay` z-index, and stacking left the confirm hidden behind
+  // the Export Modal in production (user-reported P2).
+  closeAdminAgentModal();
+
+  const ok = await showConfirm(
+    t('admin.agentsExportRegenConfirmTitle'),
+    t('admin.agentsExportRegenConfirmBody', { name }),
+    t('admin.agentsExportRegenConfirmCta'),
+  );
+  if (!ok) {
+    // Cancel path: restore the export modal so the admin "feels nothing happened".
+    // 5min cache is untouched since regenerate-key was never called.
+    await exportAdminAgentMd(agentId, name, format);
+    return;
+  }
+
+  // Confirmed: rotate the key first; old key is revoked the moment the API returns.
+  let regen;
+  try {
+    regen = await api(
+      `/superadmin/agents/${encodeURIComponent(agentId)}/regenerate-key`,
+      { method: 'POST' },
+    );
+  } catch (e) {
+    // regenerate-key failed — old key is still valid; do not download anything.
+    alert(t('common.failedPrefix') + e.message);
+    return;
+  }
+
+  // Update the 5min cache + refresh the list to surface the new mask.
+  window._adminAgentLastKey = { name, key: regen.api_key_plaintext, ts: Date.now() };
+  try { await reloadAdminAgents(); } catch (_) { /* non-critical */ }
+
+  // Fetch fresh export and trigger the file save.
+  let downloaded = false;
+  try {
+    const exp = await api(
+      `/superadmin/agents/${encodeURIComponent(agentId)}/export?format=${encodeURIComponent(format)}`,
+    );
+    const content = exp.content.split('<your_api_key>').join(regen.api_key_plaintext);
+    downloadTextAs(filename, content);
+    downloaded = true;
+  } catch (e) {
+    // regen succeeded but the download path failed — surface the new plaintext
+    // via the existing reveal modal so the admin doesn't lose access permanently.
+    alert(t('common.failedPrefix') + e.message);
+    showAdminAgentApiKey(regen.api_key_plaintext, name, t('admin.agentsKeyRegenTitle'));
+    return;
+  }
+
+  if (downloaded) {
+    alert(t('admin.agentsExportRegenSuccess'));
+  }
+}
+
+async function toggleInviteRequired(checkbox) {
+  const statusEl = document.getElementById('settingsStatus');
+  const desired = !!checkbox.checked;
+  checkbox.disabled = true;
+  if (statusEl) { statusEl.textContent = t('common.saving'); statusEl.style.color = 'var(--muted)'; }
+  try {
+    const result = await api('/superadmin/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ invite_required: desired }),
+    });
+    checkbox.checked = !!result.invite_required;
+    if (statusEl) {
+      statusEl.textContent = t('admin.settingsSaved');
+      statusEl.style.color = 'var(--success)';
+      setTimeout(() => { statusEl.textContent = ''; }, 3000);
+    }
+  } catch (e) {
+    checkbox.checked = !desired;
+    if (statusEl) { statusEl.textContent = t('common.errorPrefix') + e.message; statusEl.style.color = 'var(--danger)'; }
+  } finally {
+    checkbox.disabled = false;
+  }
 }
 
 async function generateInviteCode() {

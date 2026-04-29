@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import contextvars
 import os
 import re
+from contextlib import asynccontextmanager
 
 DB_PATH = "agent_mailer.db"
 
@@ -21,7 +23,9 @@ PG_SCHEMA = [
         created_at TEXT NOT NULL,
         tags TEXT NOT NULL DEFAULT '[]',
         user_id TEXT,
-        last_seen TEXT
+        last_seen TEXT,
+        status TEXT NOT NULL DEFAULT 'active',
+        api_key_suffix TEXT NOT NULL DEFAULT ''
     )
     """,
     """
@@ -120,6 +124,13 @@ PG_SCHEMA = [
         updated_at TEXT NOT NULL,
         updated_by TEXT NOT NULL DEFAULT '',
         UNIQUE(team_id, title)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS system_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL
     )
     """,
 ]
@@ -245,6 +256,20 @@ CREATE TABLE IF NOT EXISTS team_memories (
 );
 """
 
+SYSTEM_SETTINGS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS system_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+"""
+
+# Known setting keys (kept here so callers don't sprinkle string literals)
+SETTING_INVITE_REQUIRED = "invite_required"
+DEFAULT_SETTINGS: dict[str, str] = {
+    SETTING_INVITE_REQUIRED: "1",
+}
+
 # --- Visibility SQL filters ---
 
 INBOX_THREAD_VISIBILITY_SQL = (
@@ -331,6 +356,14 @@ class _PgRowWrapper:
         return self._data.get(key, default)
 
 
+# Holds the asyncpg connection currently bound to a transaction (if any).
+# Set via PgConnectionWrapper.transaction() so nested execute() calls reuse
+# the same connection instead of acquiring a fresh one from the pool —
+# without this, multi-step writes on PG run on different connections and
+# cannot be rolled back atomically.
+_pg_tx_conn: contextvars.ContextVar = contextvars.ContextVar("_pg_tx_conn", default=None)
+
+
 # ── PostgreSQL connection wrapper ───────────────────────────────────
 
 class PgConnectionWrapper:
@@ -339,38 +372,87 @@ class PgConnectionWrapper:
     def __init__(self, pool):
         self._pool = pool
 
+    @staticmethod
+    async def _exec_on_conn(conn, sql: str, pg_sql: str, args: tuple):
+        sql_upper = sql.strip().upper()
+        if sql_upper.startswith(("INSERT", "UPDATE", "DELETE")):
+            status = await conn.execute(pg_sql, *args)
+            rowcount = 0
+            if status:
+                parts = status.split()
+                if len(parts) >= 2 and parts[-1].isdigit():
+                    rowcount = int(parts[-1])
+                elif status == "INSERT 0 1":
+                    rowcount = 1
+            return _PgCursorWrapper(rowcount=rowcount)
+        rows = await conn.fetch(pg_sql, *args)
+        columns = list(rows[0].keys()) if rows else []
+        return _PgCursorWrapper(rows, columns=columns, rowcount=len(rows))
+
     async def execute(self, sql: str, params=None):
         pg_sql = _sqlite_to_pg(sql)
         args = tuple(params) if params else ()
-        sql_upper = sql.strip().upper()
-
+        held = _pg_tx_conn.get()
+        if held is not None:
+            return await self._exec_on_conn(held, sql, pg_sql, args)
         async with self._pool.acquire() as conn:
-            if sql_upper.startswith(("INSERT", "UPDATE", "DELETE")):
-                status = await conn.execute(pg_sql, *args)
-                # Parse rowcount from status like "UPDATE 3"
-                rowcount = 0
-                if status:
-                    parts = status.split()
-                    if len(parts) >= 2 and parts[-1].isdigit():
-                        rowcount = int(parts[-1])
-                    elif status == "INSERT 0 1":
-                        rowcount = 1
-                return _PgCursorWrapper(rowcount=rowcount)
-            else:
-                rows = await conn.fetch(pg_sql, *args)
-                columns = list(rows[0].keys()) if rows else []
-                return _PgCursorWrapper(rows, columns=columns, rowcount=len(rows))
+            return await self._exec_on_conn(conn, sql, pg_sql, args)
 
     async def executescript(self, sql: str):
         """Execute multiple statements (for schema creation)."""
+        held = _pg_tx_conn.get()
+        if held is not None:
+            await held.execute(sql)
+            return
         async with self._pool.acquire() as conn:
             await conn.execute(sql)
 
+    @asynccontextmanager
+    async def transaction(self):
+        """Hold a single connection across nested execute() calls and run them in one PG transaction."""
+        if _pg_tx_conn.get() is not None:
+            # Already inside a transaction — reuse held connection (savepoint-like nesting not needed for our usage).
+            yield self
+            return
+        async with self._pool.acquire() as conn:
+            async with conn.transaction():
+                token = _pg_tx_conn.set(conn)
+                try:
+                    yield self
+                finally:
+                    _pg_tx_conn.reset(token)
+
     async def commit(self):
-        pass  # asyncpg auto-commits
+        pass  # asyncpg auto-commits per execute (or atomically inside transaction()).
 
     async def close(self):
         await self._pool.close()
+
+
+@asynccontextmanager
+async def db_transaction(db):
+    """Atomic-write context manager that works for both PG and SQLite.
+
+    On PG, holds a single asyncpg connection and uses ``connection.transaction()``
+    so all nested ``db.execute(...)`` calls land in the same transaction and roll
+    back together on error. On SQLite (aiosqlite), commits on clean exit and
+    issues a ROLLBACK on exception.
+    """
+    if isinstance(db, PgConnectionWrapper):
+        async with db.transaction():
+            yield db
+        return
+    # aiosqlite path — implicit transaction; commit on success, rollback on failure.
+    try:
+        yield db
+    except BaseException:
+        try:
+            await db.execute("ROLLBACK")
+        except Exception:
+            pass
+        raise
+    else:
+        await db.commit()
 
 
 # ── Factory functions ───────────────────────────────────────────────
@@ -431,6 +513,8 @@ async def init_db(db):
         await _add_column_if_missing(db, "agents", "last_seen", "TEXT")
         await _add_column_if_missing(db, "users", "filter_tags", "TEXT NOT NULL DEFAULT '[]'")
         await _add_column_if_missing(db, "agents", "team_id", "TEXT REFERENCES teams(id) ON DELETE SET NULL")
+        await _add_column_if_missing(db, "agents", "status", "TEXT NOT NULL DEFAULT 'active'")
+        await _add_column_if_missing(db, "agents", "api_key_suffix", "TEXT NOT NULL DEFAULT ''")
         # pg_trgm extension + GIN indexes for full-text search
         try:
             await db.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
@@ -449,9 +533,61 @@ async def init_db(db):
         await db.executescript(FILES_SCHEMA)
         await db.executescript(TEAMS_SCHEMA)
         await db.executescript(TEAM_MEMORIES_SCHEMA)
+        await db.executescript(SYSTEM_SETTINGS_SCHEMA)
         await _add_column_if_missing(db, "agents", "tags", "TEXT NOT NULL DEFAULT '[]'")
         await _add_column_if_missing(db, "agents", "user_id", "TEXT")
         await _add_column_if_missing(db, "agents", "last_seen", "TEXT")
         await _add_column_if_missing(db, "users", "filter_tags", "TEXT NOT NULL DEFAULT '[]'")
         await _add_column_if_missing(db, "agents", "team_id", "TEXT REFERENCES teams(id) ON DELETE SET NULL")
+        await _add_column_if_missing(db, "agents", "status", "TEXT NOT NULL DEFAULT 'active'")
+        await _add_column_if_missing(db, "agents", "api_key_suffix", "TEXT NOT NULL DEFAULT ''")
+    await _seed_default_settings(db)
     await db.commit()
+
+
+# ── Settings helpers ────────────────────────────────────────────────
+
+async def _seed_default_settings(db) -> None:
+    """Insert default rows for any setting key that doesn't yet exist."""
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    for key, default in DEFAULT_SETTINGS.items():
+        cursor = await db.execute(
+            "SELECT 1 FROM system_settings WHERE key = ?", (key,)
+        )
+        if await cursor.fetchone():
+            continue
+        await db.execute(
+            "INSERT INTO system_settings (key, value, updated_at) VALUES (?, ?, ?)",
+            (key, default, now),
+        )
+
+
+async def get_setting(db, key: str, default: str | None = None) -> str | None:
+    cursor = await db.execute(
+        "SELECT value FROM system_settings WHERE key = ?", (key,)
+    )
+    row = await cursor.fetchone()
+    if row is None:
+        return DEFAULT_SETTINGS.get(key, default)
+    return row["value"]
+
+
+async def set_setting(db, key: str, value: str) -> None:
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    async with db_transaction(db):
+        cursor = await db.execute(
+            "UPDATE system_settings SET value = ?, updated_at = ? WHERE key = ?",
+            (value, now, key),
+        )
+        if cursor.rowcount == 0:
+            await db.execute(
+                "INSERT INTO system_settings (key, value, updated_at) VALUES (?, ?, ?)",
+                (key, value, now),
+            )
+
+
+async def get_invite_required(db) -> bool:
+    raw = await get_setting(db, SETTING_INVITE_REQUIRED, "1")
+    return str(raw).strip() not in ("0", "false", "False", "")

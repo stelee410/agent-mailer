@@ -149,7 +149,70 @@ class TrashedMessageDetail(BaseModel):
 class UserRegisterRequest(BaseModel):
     username: str
     password: str
-    invite_code: str
+    invite_code: str | None = None
+
+
+class RegistrationConfigResponse(BaseModel):
+    invite_required: bool
+
+
+class SystemSettingsResponse(BaseModel):
+    invite_required: bool
+
+
+class SystemSettingsUpdateRequest(BaseModel):
+    invite_required: bool
+
+
+# --- Superadmin: managed agents ---
+
+
+class AdminAgentCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
+    address_local: str | None = None  # local-part of address; defaults to name
+    role: str = ""
+    description: str = ""
+    system_prompt: str = ""
+    tags: list[str] = []
+    team_id: str | None = None
+
+
+class AdminAgentUpdateRequest(BaseModel):
+    role: str | None = None
+    description: str | None = None
+    system_prompt: str | None = None
+    tags: list[str] | None = None
+    team_id: str | None = None
+
+
+class AdminAgentResponse(BaseModel):
+    id: str
+    name: str
+    address: str
+    role: str
+    description: str
+    system_prompt: str
+    tags: list[str] = []
+    team_id: str | None = None
+    status: str = "active"
+    created_at: str
+    last_seen: str | None = None
+    api_key_masked: str = ""  # e.g. "amk_****abc123" for table display
+
+
+class AdminAgentCreateResponse(AdminAgentResponse):
+    api_key_plaintext: str  # one-time only
+
+
+class AdminAgentRegenerateKeyResponse(BaseModel):
+    agent_id: str
+    api_key_masked: str
+    api_key_plaintext: str
+
+
+class AdminAgentExportResponse(BaseModel):
+    filename: str
+    content: str
 
 
 class UserLoginRequest(BaseModel):
