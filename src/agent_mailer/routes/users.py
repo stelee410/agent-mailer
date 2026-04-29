@@ -10,7 +10,7 @@ from agent_mailer.auth import (
     hash_password,
     verify_password,
 )
-from agent_mailer.db import get_invite_required
+from agent_mailer.db import db_transaction, get_invite_required
 from agent_mailer.dependencies import get_current_user
 from agent_mailer.models import (
     ApiKeyCreateRequest,
@@ -64,22 +64,21 @@ async def register(request: Request, body: UserRegisterRequest):
     user_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
 
-    await db.execute(
-        "INSERT INTO users (id, username, password_hash, is_superadmin, created_at) VALUES (?, ?, ?, ?, ?)",
-        (user_id, body.username, hash_password(body.password), int(is_first_user), now),
-    )
-
-    if invite_required:
-        # Atomic invite code consumption — avoids TOCTOU race
-        cursor = await db.execute(
-            "UPDATE invite_codes SET used_by = ?, used_at = ? WHERE code = ? AND used_by IS NULL",
-            (user_id, now, body.invite_code),
-        )
-        if cursor.rowcount == 0:
-            # Rollback the user insert
-            await db.execute("DELETE FROM users WHERE id = ?", (user_id,))
-            raise HTTPException(status_code=400, detail="Invalid or already used invite code")
-    await db.commit()
+    try:
+        async with db_transaction(db):
+            await db.execute(
+                "INSERT INTO users (id, username, password_hash, is_superadmin, created_at) VALUES (?, ?, ?, ?, ?)",
+                (user_id, body.username, hash_password(body.password), int(is_first_user), now),
+            )
+            if invite_required:
+                cursor = await db.execute(
+                    "UPDATE invite_codes SET used_by = ?, used_at = ? WHERE code = ? AND used_by IS NULL",
+                    (user_id, now, body.invite_code),
+                )
+                if cursor.rowcount == 0:
+                    raise HTTPException(status_code=400, detail="Invalid or already used invite code")
+    except HTTPException:
+        raise
     return UserResponse(
         id=user_id,
         username=body.username,

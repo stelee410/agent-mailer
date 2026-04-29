@@ -11,6 +11,7 @@ from agent_mailer.auth import create_session_token, generate_api_key, hash_api_k
 from agent_mailer.config import DOMAIN
 from agent_mailer.db import (
     SETTING_INVITE_REQUIRED,
+    db_transaction,
     get_invite_required,
     set_setting,
 )
@@ -259,29 +260,29 @@ async def admin_create_agent(
     raw_key, key_hash = generate_api_key()
     suffix = raw_key[-6:]
 
-    await db.execute(
-        """INSERT INTO agents (id, name, address, role, description, system_prompt, tags, user_id, created_at, status, api_key_suffix, team_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)""",
-        (
-            agent_id,
-            name,
-            address,
-            body.role or "",
-            body.description or "",
-            body.system_prompt or "",
-            json.dumps(body.tags, ensure_ascii=False),
-            admin["id"],
-            now,
-            suffix,
-            body.team_id,
-        ),
-    )
-    key_id = str(uuid.uuid4())
-    await db.execute(
-        "INSERT INTO api_keys (id, user_id, key_hash, name, created_at, is_active) VALUES (?, ?, ?, ?, ?, 1)",
-        (key_id, admin["id"], key_hash, f"agent:{agent_id}", now),
-    )
-    await db.commit()
+    async with db_transaction(db):
+        await db.execute(
+            """INSERT INTO agents (id, name, address, role, description, system_prompt, tags, user_id, created_at, status, api_key_suffix, team_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)""",
+            (
+                agent_id,
+                name,
+                address,
+                body.role or "",
+                body.description or "",
+                body.system_prompt or "",
+                json.dumps(body.tags, ensure_ascii=False),
+                admin["id"],
+                now,
+                suffix,
+                body.team_id,
+            ),
+        )
+        key_id = str(uuid.uuid4())
+        await db.execute(
+            "INSERT INTO api_keys (id, user_id, key_hash, name, created_at, is_active) VALUES (?, ?, ?, ?, ?, 1)",
+            (key_id, admin["id"], key_hash, f"agent:{agent_id}", now),
+        )
 
     cursor = await db.execute("SELECT * FROM agents WHERE id = ?", (agent_id,))
     row = await cursor.fetchone()
@@ -345,12 +346,11 @@ async def admin_delete_agent(
         raise HTTPException(status_code=404, detail="Agent not found")
     if (row["status"] or "active") == "deleted":
         return {"ok": True, "agent_id": agent_id, "already_deleted": True}
-    await db.execute("UPDATE agents SET status = 'deleted' WHERE id = ?", (agent_id,))
-    # Deactivate the agent's API keys
-    await db.execute(
-        "UPDATE api_keys SET is_active = 0 WHERE name = ?", (f"agent:{agent_id}",)
-    )
-    await db.commit()
+    async with db_transaction(db):
+        await db.execute("UPDATE agents SET status = 'deleted' WHERE id = ?", (agent_id,))
+        await db.execute(
+            "UPDATE api_keys SET is_active = 0 WHERE name = ?", (f"agent:{agent_id}",)
+        )
     return {"ok": True, "agent_id": agent_id}
 
 
@@ -372,19 +372,19 @@ async def admin_regenerate_agent_key(
     suffix = raw_key[-6:]
     now = datetime.now(timezone.utc).isoformat()
 
-    # Invalidate any existing keys for this agent.
-    await db.execute(
-        "UPDATE api_keys SET is_active = 0 WHERE name = ?", (f"agent:{agent_id}",)
-    )
-    key_id = str(uuid.uuid4())
-    await db.execute(
-        "INSERT INTO api_keys (id, user_id, key_hash, name, created_at, is_active) VALUES (?, ?, ?, ?, ?, 1)",
-        (key_id, admin["id"], key_hash, f"agent:{agent_id}", now),
-    )
-    await db.execute(
-        "UPDATE agents SET api_key_suffix = ? WHERE id = ?", (suffix, agent_id)
-    )
-    await db.commit()
+    async with db_transaction(db):
+        # Invalidate any existing keys for this agent and atomically issue the new one.
+        await db.execute(
+            "UPDATE api_keys SET is_active = 0 WHERE name = ?", (f"agent:{agent_id}",)
+        )
+        key_id = str(uuid.uuid4())
+        await db.execute(
+            "INSERT INTO api_keys (id, user_id, key_hash, name, created_at, is_active) VALUES (?, ?, ?, ?, ?, 1)",
+            (key_id, admin["id"], key_hash, f"agent:{agent_id}", now),
+        )
+        await db.execute(
+            "UPDATE agents SET api_key_suffix = ? WHERE id = ?", (suffix, agent_id)
+        )
 
     return AdminAgentRegenerateKeyResponse(
         agent_id=agent_id,
