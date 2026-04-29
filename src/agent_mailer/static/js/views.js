@@ -2094,23 +2094,59 @@ async function exportAdminAgentMd(agentId, name, format) {
 }
 
 async function regenAndDownloadAdminAgentMd(agentId, name, format, filename) {
+  // Close the Export Modal before showing the confirm dialog. The two share
+  // a `.modal-overlay` z-index, and stacking left the confirm hidden behind
+  // the Export Modal in production (user-reported P2).
+  closeAdminAgentModal();
+
   const ok = await showConfirm(
     t('admin.agentsExportRegenConfirmTitle'),
     t('admin.agentsExportRegenConfirmBody', { name }),
     t('admin.agentsExportRegenConfirmCta'),
   );
-  if (!ok) return;
+  if (!ok) {
+    // Cancel path: restore the export modal so the admin "feels nothing happened".
+    // 5min cache is untouched since regenerate-key was never called.
+    await exportAdminAgentMd(agentId, name, format);
+    return;
+  }
+
+  // Confirmed: rotate the key first; old key is revoked the moment the API returns.
+  let regen;
   try {
-    const regen = await api(`/superadmin/agents/${encodeURIComponent(agentId)}/regenerate-key`, { method: 'POST' });
-    window._adminAgentLastKey = { name, key: regen.api_key_plaintext, ts: Date.now() };
-    const exp = await api(`/superadmin/agents/${encodeURIComponent(agentId)}/export?format=${encodeURIComponent(format)}`);
+    regen = await api(
+      `/superadmin/agents/${encodeURIComponent(agentId)}/regenerate-key`,
+      { method: 'POST' },
+    );
+  } catch (e) {
+    // regenerate-key failed — old key is still valid; do not download anything.
+    alert(t('common.failedPrefix') + e.message);
+    return;
+  }
+
+  // Update the 5min cache + refresh the list to surface the new mask.
+  window._adminAgentLastKey = { name, key: regen.api_key_plaintext, ts: Date.now() };
+  try { await reloadAdminAgents(); } catch (_) { /* non-critical */ }
+
+  // Fetch fresh export and trigger the file save.
+  let downloaded = false;
+  try {
+    const exp = await api(
+      `/superadmin/agents/${encodeURIComponent(agentId)}/export?format=${encodeURIComponent(format)}`,
+    );
     const content = exp.content.split('<your_api_key>').join(regen.api_key_plaintext);
     downloadTextAs(filename, content);
-    closeAdminAgentModal();
-    await reloadAdminAgents();
-    alert(t('admin.agentsExportRegenSuccess'));
+    downloaded = true;
   } catch (e) {
+    // regen succeeded but the download path failed — surface the new plaintext
+    // via the existing reveal modal so the admin doesn't lose access permanently.
     alert(t('common.failedPrefix') + e.message);
+    showAdminAgentApiKey(regen.api_key_plaintext, name, t('admin.agentsKeyRegenTitle'));
+    return;
+  }
+
+  if (downloaded) {
+    alert(t('admin.agentsExportRegenSuccess'));
   }
 }
 

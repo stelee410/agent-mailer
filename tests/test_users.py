@@ -647,6 +647,38 @@ async def test_admin_agents_export_agent_md_and_soul_md(client, superadmin):
     assert s_body["content"] == a_body["content"]
 
 
+def test_views_js_regen_closes_export_modal_before_confirm():
+    """Regression for the production P2: clicking 'Regenerate Key &
+    Download' from inside the Export Modal must close the modal *before*
+    showing the confirm dialog. The Export Modal and ``showConfirm``
+    share the same ``.modal-overlay`` z-index, so leaving them stacked
+    hides the confirm behind the export view (user reported they
+    couldn't see the confirm at all).
+    """
+    import pathlib
+    src = pathlib.Path(
+        __file__
+    ).resolve().parent.parent / "src" / "agent_mailer" / "static" / "js" / "views.js"
+    text = src.read_text(encoding="utf-8")
+    fn_marker = "async function regenAndDownloadAdminAgentMd("
+    fn_start = text.index(fn_marker)
+    # Bound the search to the function's body — find the next top-level
+    # ``async function``/``function`` definition or end-of-file.
+    fn_end_candidates = [text.find(token, fn_start + len(fn_marker))
+                         for token in ("\nasync function ", "\nfunction ")]
+    fn_end_candidates = [pos for pos in fn_end_candidates if pos > 0]
+    fn_end = min(fn_end_candidates) if fn_end_candidates else len(text)
+    body = text[fn_start:fn_end]
+    close_idx = body.find("closeAdminAgentModal()")
+    confirm_idx = body.find("showConfirm(")
+    assert close_idx >= 0, "regenAndDownloadAdminAgentMd must call closeAdminAgentModal()"
+    assert confirm_idx >= 0, "regenAndDownloadAdminAgentMd must call showConfirm()"
+    assert close_idx < confirm_idx, (
+        "closeAdminAgentModal() must be called *before* showConfirm() in "
+        "regenAndDownloadAdminAgentMd to prevent the modals from stacking."
+    )
+
+
 def test_views_js_export_modal_has_no_unsafe_inline_handlers():
     """Regression for the P2 finding: the export-modal Copy and
     Download(placeholder) buttons must not interpolate the AGENT.md
