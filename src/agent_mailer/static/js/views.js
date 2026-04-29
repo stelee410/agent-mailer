@@ -1876,7 +1876,7 @@ async function submitCreateAdminAgent() {
   const local = document.getElementById('aaAddrLocal').value.trim();
   const tagsRaw = document.getElementById('aaTags').value.trim();
   const tags = tagsRaw ? tagsRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
-  const teamId = document.getElementById('aaTeamId')?.value || null;
+  const teamId = document.getElementById('aaTeamId')?.value || '';
   btn.disabled = true;
   try {
     const created = await api('/superadmin/agents', {
@@ -1889,7 +1889,7 @@ async function submitCreateAdminAgent() {
         description: document.getElementById('aaDescription').value.trim(),
         system_prompt: document.getElementById('aaSystemPrompt').value,
         tags,
-        team_id: teamId || null,
+        team_id: teamId,
       }),
     });
     closeAdminAgentModal();
@@ -2024,23 +2024,71 @@ function copyText(text) {
   navigator.clipboard.writeText(text).catch(() => {});
 }
 
+function downloadTextAs(filename, content) {
+  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 0);
+}
+
+function _renderExportModal({ agentId, name, format, filename, content, hasFreshKey }) {
+  // Two safe-by-default actions and one destructive action (regen + download),
+  // plus copy/close. The destructive action requires confirmation.
+  const safeBtns = `
+    <button class="login-btn" onclick="copyText(${JSON.stringify(content)}); this.textContent='${esc(t('splash.copied'))}'">${esc(t('splash.copy'))}</button>
+    <button class="login-btn" onclick="downloadTextAs(${JSON.stringify(filename)}, ${JSON.stringify(content)})">${esc(t('admin.agentsExportDownloadPlaceholder'))}</button>
+    <button class="login-btn" style="background:var(--danger,#c0392b);color:#fff" onclick="regenAndDownloadAdminAgentMd('${esc(agentId)}', '${esc(name)}', '${esc(format)}', ${JSON.stringify(filename)})">${esc(t('admin.agentsExportRegenAndDownload'))}</button>
+    <button class="modal-cancel" onclick="closeAdminAgentModal()">${esc(t('common.confirm'))}</button>
+  `;
+  const hint = hasFreshKey
+    ? t('admin.agentsExportHintWithKey')
+    : t('admin.agentsExportHint');
+  _adminAgentsModal(`
+    <h3 style="margin-top:0">${esc(filename)} — ${esc(name)}</h3>
+    <p style="font-size:12px;color:var(--muted)">${esc(hint)}</p>
+    <textarea readonly rows="20" style="width:100%;font-family:var(--mono,monospace);font-size:12px">${esc(content)}</textarea>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap">${safeBtns}</div>
+  `);
+}
+
 async function exportAdminAgentMd(agentId, name, format) {
   try {
     const result = await api(`/superadmin/agents/${encodeURIComponent(agentId)}/export?format=${encodeURIComponent(format)}`);
     let content = result.content;
+    let hasFreshKey = false;
     const last = window._adminAgentLastKey;
     if (last && last.name === name && (Date.now() - last.ts) < 5 * 60 * 1000) {
       content = content.split('<your_api_key>').join(last.key);
+      hasFreshKey = true;
     }
-    _adminAgentsModal(`
-      <h3 style="margin-top:0">${esc(result.filename)} — ${esc(name)}</h3>
-      <p style="font-size:12px;color:var(--muted)">${esc(t('admin.agentsExportHint'))}</p>
-      <textarea readonly rows="20" style="width:100%;font-family:var(--mono,monospace);font-size:12px">${esc(content)}</textarea>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
-        <button class="login-btn" onclick="copyText(${JSON.stringify(content)}); this.textContent='${esc(t('splash.copied'))}'">${esc(t('splash.copy'))}</button>
-        <button class="modal-cancel" onclick="closeAdminAgentModal()">${esc(t('common.confirm'))}</button>
-      </div>
-    `);
+    _renderExportModal({
+      agentId, name, format, filename: result.filename, content, hasFreshKey,
+    });
+  } catch (e) {
+    alert(t('common.failedPrefix') + e.message);
+  }
+}
+
+async function regenAndDownloadAdminAgentMd(agentId, name, format, filename) {
+  const ok = await showConfirm(
+    t('admin.agentsExportRegenConfirmTitle'),
+    t('admin.agentsExportRegenConfirmBody', { name }),
+    t('admin.agentsExportRegenConfirmCta'),
+  );
+  if (!ok) return;
+  try {
+    const regen = await api(`/superadmin/agents/${encodeURIComponent(agentId)}/regenerate-key`, { method: 'POST' });
+    window._adminAgentLastKey = { name, key: regen.api_key_plaintext, ts: Date.now() };
+    const exp = await api(`/superadmin/agents/${encodeURIComponent(agentId)}/export?format=${encodeURIComponent(format)}`);
+    const content = exp.content.split('<your_api_key>').join(regen.api_key_plaintext);
+    downloadTextAs(filename, content);
+    closeAdminAgentModal();
+    await reloadAdminAgents();
+    alert(t('admin.agentsExportRegenSuccess'));
   } catch (e) {
     alert(t('common.failedPrefix') + e.message);
   }

@@ -647,6 +647,45 @@ async def test_admin_agents_export_agent_md_and_soul_md(client, superadmin):
     assert s_body["content"] == a_body["content"]
 
 
+async def test_admin_agents_regenerate_then_export_substitutes_plaintext(client, superadmin):
+    """Documents the frontend orchestration sequence for the
+    "Regenerate Key & Download" export action: regenerate-key returns
+    a fresh plaintext, the export endpoint emits the placeholder
+    template, and naive client-side substitution yields a file that
+    contains the new plaintext API key (and not the placeholder).
+    """
+    c, token, _ = superadmin
+    h = {"Authorization": f"Bearer {token}"}
+    r = await c.post(
+        "/superadmin/agents",
+        json={"name": "regdl", "system_prompt": "the prompt"},
+        headers=h,
+    )
+    aid = r.json()["id"]
+    old_key = r.json()["api_key_plaintext"]
+
+    r = await c.post(f"/superadmin/agents/{aid}/regenerate-key", headers=h)
+    assert r.status_code == 200
+    new_key = r.json()["api_key_plaintext"]
+    assert new_key != old_key
+
+    # Export still emits placeholder; the frontend is responsible for substitution.
+    r = await c.get(f"/superadmin/agents/{aid}/export?format=agent_md", headers=h)
+    assert r.status_code == 200
+    raw_md = r.json()["content"]
+    assert "<your_api_key>" in raw_md
+
+    rendered = raw_md.replace("<your_api_key>", new_key)
+    assert "<your_api_key>" not in rendered
+    assert new_key in rendered
+    # Identity + system prompt survived.
+    assert "the prompt" in rendered
+
+    # Old key really is revoked.
+    r_old = await c.get("/agents", headers={"X-API-Key": old_key})
+    assert r_old.status_code == 401
+
+
 async def test_admin_agents_address_local_regex_tightened(client, superadmin):
     c, token, _ = superadmin
     h = {"Authorization": f"Bearer {token}"}

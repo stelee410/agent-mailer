@@ -373,6 +373,13 @@
       'admin.agentsDeleteTitle': '删除 Agent',
       'admin.agentsDeleteConfirm': '确定删除 "{name}"？地址将保留不可重用。',
       'admin.agentsExportHint': '若刚刚创建/重生成 Key，模板会自动嵌入明文 Key；否则保留 <your_api_key> 占位符。',
+      'admin.agentsExportHintWithKey': '已嵌入本次会话的明文 Key，关闭后无法再次查看；请立即妥善保存或下载。',
+      'admin.agentsExportDownloadPlaceholder': '下载（占位符）',
+      'admin.agentsExportRegenAndDownload': '重生成 Key 并立即下载',
+      'admin.agentsExportRegenConfirmTitle': '重生成并立即下载？',
+      'admin.agentsExportRegenConfirmBody': '将为 "{name}" 生成新 API Key 并立即下载文件。\n\n⚠️ 旧 Key 立即失效，所有正在使用旧 Key 的在线 Agent 将立即收到 401 失联。\n\n请确认所有用户已知悉本操作。',
+      'admin.agentsExportRegenConfirmCta': '我知晓风险，继续',
+      'admin.agentsExportRegenSuccess': 'Key 已重生成，新文件已下载。',
 
       // --- Teams ---
       'teams.title': 'Teams',
@@ -859,6 +866,13 @@
       'admin.agentsDeleteTitle': 'Delete Agent',
       'admin.agentsDeleteConfirm': 'Delete "{name}"? Address remains reserved.',
       'admin.agentsExportHint': 'If you just created/regenerated the key, plaintext is embedded; otherwise <your_api_key> placeholder is shown.',
+      'admin.agentsExportHintWithKey': 'Plaintext key embedded for this session — cannot be viewed again after close. Save or download it now.',
+      'admin.agentsExportDownloadPlaceholder': 'Download (placeholder)',
+      'admin.agentsExportRegenAndDownload': 'Regenerate Key & Download',
+      'admin.agentsExportRegenConfirmTitle': 'Regenerate and download?',
+      'admin.agentsExportRegenConfirmBody': 'A new API Key will be issued for "{name}" and the file will download immediately.\n\n⚠️ The old key is revoked instantly; any agent currently using it will get 401 right away.\n\nProceed only if all consumers are aware.',
+      'admin.agentsExportRegenConfirmCta': 'I understand, proceed',
+      'admin.agentsExportRegenSuccess': 'Key regenerated. File downloaded.',
 
       // --- Teams ---
       'teams.title': 'Teams',
