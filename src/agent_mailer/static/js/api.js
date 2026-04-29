@@ -25,9 +25,10 @@ async function fetchAgents() {
   return agents;
 }
 
-async function fetchInbox(address, page, pageSize) {
+async function fetchInbox(address, page, pageSize, fromTeamId) {
   let url = `/admin/messages/inbox/${encodeURIComponent(address)}?all=true`;
   if (page != null) url += `&page=${page}&page_size=${pageSize || 20}`;
+  if (fromTeamId) url += `&from_team_id=${encodeURIComponent(fromTeamId)}`;
   return api(url);
 }
 

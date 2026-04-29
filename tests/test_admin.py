@@ -247,6 +247,56 @@ async def test_admin_inbox_all(client, agents):
     assert len(resp.json()) == 1
 
 
+async def test_admin_inbox_filters_human_operator_by_sender_team(client, agents):
+    human = (await client.get("/admin/human-operator")).json()
+    alpha = (await client.post("/admin/teams", json={"name": "Alpha"})).json()["id"]
+    beta = (await client.post("/admin/teams", json={"name": "Beta"})).json()["id"]
+    await client.post(f"/admin/teams/{alpha}/agents", json={"agent_id": agents["planner"]["id"]})
+    await client.post(f"/admin/teams/{beta}/agents", json={"agent_id": agents["coder"]["id"]})
+
+    for subject in ("Alpha 1", "Alpha 2"):
+        await client.post("/messages/send", json={
+            "agent_id": agents["planner"]["id"],
+            "from_agent": agents["planner"]["address"],
+            "to_agent": human["address"],
+            "action": "send",
+            "subject": subject,
+            "body": "from alpha",
+        })
+    await client.post("/messages/send", json={
+        "agent_id": agents["coder"]["id"],
+        "from_agent": agents["coder"]["address"],
+        "to_agent": human["address"],
+        "action": "send",
+        "subject": "Beta 1",
+        "body": "from beta",
+    })
+
+    inbox_url = f"/admin/messages/inbox/{human['address']}"
+    all_resp = await client.get(inbox_url, params={"all": "true"})
+    assert all_resp.status_code == 200
+    assert {m["subject"] for m in all_resp.json()} == {"Alpha 1", "Alpha 2", "Beta 1"}
+
+    alpha_resp = await client.get(inbox_url, params={"all": "true", "from_team_id": alpha})
+    assert alpha_resp.status_code == 200
+    assert {m["subject"] for m in alpha_resp.json()} == {"Alpha 1", "Alpha 2"}
+
+    beta_resp = await client.get(inbox_url, params={"all": "true", "from_team_id": beta})
+    assert beta_resp.status_code == 200
+    assert {m["subject"] for m in beta_resp.json()} == {"Beta 1"}
+
+    paged_resp = await client.get(
+        inbox_url, params={"all": "true", "from_team_id": alpha, "page": 1, "page_size": 1}
+    )
+    assert paged_resp.status_code == 200
+    assert paged_resp.json()["total"] == 2
+    assert paged_resp.json()["total_pages"] == 2
+    assert len(paged_resp.json()["messages"]) == 1
+
+    missing_resp = await client.get(inbox_url, params={"all": "true", "from_team_id": "missing-team"})
+    assert missing_resp.status_code == 404
+
+
 async def test_admin_inbox_does_not_mark_read(client, agents):
     """Peeking via admin inbox should not change is_read status."""
     await client.post("/messages/send", json={

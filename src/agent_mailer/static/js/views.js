@@ -542,7 +542,7 @@ async function showHumanInbox() {
   if (modeSelect) modeSelect.value = 'agents';
 
   if (HUMAN_OPERATOR_ADDRESS) {
-    currentView = { type: 'inbox', address: HUMAN_OPERATOR_ADDRESS, agentId: HUMAN_OPERATOR_AGENT_ID };
+    currentView = { type: 'inbox', address: HUMAN_OPERATOR_ADDRESS, agentId: HUMAN_OPERATOR_AGENT_ID, fromTeamId: '' };
     document.getElementById('main').innerHTML = '';
     await refreshSidebar();
     await renderInbox();
@@ -554,10 +554,10 @@ async function showHumanInbox() {
   }
 }
 
-async function showInbox(address, agentId, page) {
+async function showInbox(address, agentId, page, fromTeamId) {
   clearNav();
   setSidebarSpecialMode('none');
-  currentView = { type: 'inbox', address, agentId: agentId || null, page: page || 1 };
+  currentView = { type: 'inbox', address, agentId: agentId || null, page: page || 1, fromTeamId: fromTeamId || '' };
   document.getElementById('main').innerHTML = '';
   await refreshSidebar();
   await renderInbox();
@@ -571,12 +571,41 @@ function renderTagEditor(agentId, tags) {
   return `<div class="tag-editor" id="tagEditor">${pills}<div class="tag-input-wrap"><input class="tag-input" id="tagInput" type="text" placeholder="${esc(t('tags.addPlaceholder'))}" data-agent-id="${esc(agentId)}" autocomplete="off"><div class="tag-autocomplete" id="tagAutocomplete"></div></div></div>`;
 }
 
+function isHumanInbox(address) {
+  return HUMAN_OPERATOR_ADDRESS && address === HUMAN_OPERATOR_ADDRESS;
+}
+
+async function renderInboxTeamFilter(address, selectedTeamId) {
+  if (!isHumanInbox(address)) return '';
+  try {
+    await fetchTeams();
+  } catch (e) {
+    return '';
+  }
+  if (!teamsData.length) return '';
+  const options = [
+    `<option value="">${esc(t('inbox.allTeams'))}</option>`,
+    ...teamsData.map(tm => `<option value="${esc(tm.id)}" ${tm.id === selectedTeamId ? 'selected' : ''}>${esc(tm.name)}</option>`),
+  ].join('');
+  return `<label class="inbox-team-filter"><span>${esc(t('inbox.teamFilter'))}</span><select onchange="changeInboxTeamFilter(this.value)">${options}</select></label>`;
+}
+
+async function changeInboxTeamFilter(teamId) {
+  if (currentView?.type !== 'inbox' || !isHumanInbox(currentView.address)) return;
+  currentView.fromTeamId = teamId || '';
+  currentView.page = 1;
+  expandedMsg = null;
+  document.getElementById('main').innerHTML = '';
+  await renderInbox();
+}
+
 async function renderInbox() {
   if (currentView?.type !== 'inbox') return;
   const address = currentView.address;
   const agentId = currentView.agentId;
   const page = currentView.page || 1;
-  const data = await fetchInbox(address, page, 20);
+  const fromTeamId = currentView.fromTeamId || '';
+  const data = await fetchInbox(address, page, 20, fromTeamId);
   const main = document.getElementById('main');
 
   const msgs = data.messages;
@@ -586,9 +615,9 @@ async function renderInbox() {
 
   const paginationHtml = total_pages > 1 ? `
     <div class="pagination">
-      <button class="btn btn-secondary pagination-btn" ${page <= 1 ? 'disabled' : ''} onclick="showInbox('${esc(address)}', '${esc(agentId || '')}', ${page - 1})">${esc(t('common.prev'))}</button>
+      <button class="btn btn-secondary pagination-btn" ${page <= 1 ? 'disabled' : ''} onclick="showInbox('${esc(address)}', '${esc(agentId || '')}', ${page - 1}, '${esc(fromTeamId)}')">${esc(t('common.prev'))}</button>
       <span class="pagination-info">${esc(t('common.pageInfoMessages', { page, total: total_pages, count: total }))}</span>
-      <button class="btn btn-secondary pagination-btn" ${page >= total_pages ? 'disabled' : ''} onclick="showInbox('${esc(address)}', '${esc(agentId || '')}', ${page + 1})">${esc(t('common.next'))}</button>
+      <button class="btn btn-secondary pagination-btn" ${page >= total_pages ? 'disabled' : ''} onclick="showInbox('${esc(address)}', '${esc(agentId || '')}', ${page + 1}, '${esc(fromTeamId)}')">${esc(t('common.next'))}</button>
     </div>` : '';
 
   const existingList = main.querySelector('.msg-list');
@@ -604,6 +633,7 @@ async function renderInbox() {
     }
     const oldPag = main.querySelector('.pagination');
     if (oldPag) oldPag.outerHTML = paginationHtml;
+    else if (paginationHtml) main.querySelector('.card').insertAdjacentHTML('beforeend', paginationHtml);
     hydrateMarkdownBodies(main);
     return;
   }
@@ -611,10 +641,14 @@ async function renderInbox() {
   const agentData = agentId ? statsData.find(a => a.agent_id === agentId) : null;
   const currentTags = agentData ? (agentData.tags || []) : [];
   const tagEditorHtml = renderTagEditor(agentId, currentTags);
+  const teamFilterHtml = await renderInboxTeamFilter(address, fromTeamId);
 
   main.innerHTML = `
     <div class="card">
-      <h2>${esc(t('inbox.title', { address }))}</h2>
+      <div class="card-header-row">
+        <h2>${esc(t('inbox.title', { address }))}</h2>
+        ${teamFilterHtml}
+      </div>
       ${tagEditorHtml}
       <ul class="msg-list">
         ${msgs.map(m => renderMsgItem(m)).join('')}
@@ -1096,14 +1130,53 @@ function hydrateComposeAtReference() {
   let atStartPos = -1;
   let cachedMemories = null;
 
+  function summarizeMemoryContent(content) {
+    const text = String(content || '')
+      .replace(/\r/g, '')
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean)
+      .join(' ');
+    if (!text) return t('compose.memoryNoContent');
+    return text.length > 180 ? text.slice(0, 177).trimEnd() + '...' : text;
+  }
+
+  function escapeMarkdownLinkText(text) {
+    return String(text || '')
+      .replace(/\\/g, '\\\\')
+      .replace(/\[/g, '\\[')
+      .replace(/\]/g, '\\]');
+  }
+
+  function buildMemoryInsert(memory, url) {
+    const title = String(memory.title || t('compose.memoryUntitled')).trim();
+    const content = String(memory.content || '').trim();
+    const body = content || `_${t('compose.memoryNoContent')}_`;
+    return [
+      `<!-- memory:start id=${memory.id} -->`,
+      `### ${t('compose.memoryBlockTitle')}: [${escapeMarkdownLinkText(title)}](${url})`,
+      '',
+      `${t('compose.memorySource')}: ${url}`,
+      '',
+      body,
+      `<!-- memory:end id=${memory.id} -->`,
+    ].join('\n');
+  }
+
+  function padBlockInsert(block, before, after) {
+    const prefix = before && !before.endsWith('\n\n') ? (before.endsWith('\n') ? '\n' : '\n\n') : '';
+    const suffix = after && !after.startsWith('\n\n') ? (after.startsWith('\n') ? '\n' : '\n\n') : '\n\n';
+    return prefix + block + suffix;
+  }
+
   async function loadMemories() {
     if (cachedMemories !== null) return cachedMemories;
     try {
       if (teamsData.length === 0) await fetchTeams();
       const all = [];
-      for (const t of teamsData) {
-        const mems = await fetchTeamMemories(t.id);
-        for (const m of mems) all.push(m);
+      for (const team of teamsData) {
+        const mems = await fetchTeamMemories(team.id);
+        for (const m of mems) all.push({ ...m, team_name: team.name });
       }
       cachedMemories = all;
     } catch (e) {
@@ -1127,13 +1200,19 @@ function hydrateComposeAtReference() {
       );
 
     const memItems = memories
-      .filter(m => !q || m.title.toLowerCase().includes(q))
-      .map(m =>
-        `<div class="compose-at-item" data-type="memory" data-url="${esc(location.origin + '/memories/' + m.id)}" data-name="${esc(m.title)}">
+      .filter(m => !q || m.title.toLowerCase().includes(q) || String(m.content || '').toLowerCase().includes(q))
+      .map(m => {
+        const url = location.origin + '/memories/' + m.id;
+        const meta = m.team_name ? `${t('compose.memoryTeam')}: ${m.team_name}` : t('compose.memoryReference');
+        return `<div class="compose-at-item compose-at-memory-item" data-type="memory" data-memory-id="${esc(m.id)}" data-url="${esc(url)}" data-name="${esc(m.title)}">
           <span class="compose-at-label compose-at-label-mem">MEM</span>
-          <span>${esc(m.title)}</span>
-        </div>`
-      );
+          <span class="compose-at-main">
+            <span class="compose-at-title">${esc(m.title)}</span>
+            <span class="compose-at-summary">${esc(summarizeMemoryContent(m.content))}</span>
+            <span class="compose-at-meta">${esc(meta)}</span>
+          </span>
+        </div>`;
+      });
 
     const allItems = imgItems.concat(memItems);
     if (allItems.length === 0) {
@@ -1171,11 +1250,17 @@ function hydrateComposeAtReference() {
     const type = item.dataset.type;
     const url = item.dataset.url;
     const name = item.dataset.name;
+    const memoryId = item.dataset.memoryId;
     const pos = textarea.selectionStart;
     // Replace from @ position to current cursor
     const before = textarea.value.substring(0, atStartPos - 1);
     const after = textarea.value.substring(pos);
-    const insert = type === 'image' ? `![${name}](${url})` : `[@${name}](${url})`;
+    const memory = type === 'memory'
+      ? (cachedMemories || []).find(m => String(m.id) === String(memoryId))
+      : null;
+    const insert = type === 'image'
+      ? `![${name}](${url})`
+      : padBlockInsert(buildMemoryInsert(memory || { id: memoryId, title: name, content: '' }, url), before, after);
     textarea.value = before + insert + after;
     textarea.selectionStart = textarea.selectionEnd = before.length + insert.length;
     dropdown.classList.remove('visible');

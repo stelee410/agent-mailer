@@ -209,6 +209,8 @@
       // --- Inbox ---
       'inbox.title': '收件箱：{address}',
       'inbox.empty': '暂无消息。',
+      'inbox.teamFilter': '按 Team',
+      'inbox.allTeams': '全部 Team',
       'inbox.copyMd': '复制为 Markdown',
       'inbox.copyMdTitle': '以 Markdown 格式复制本条邮件',
       'inbox.saveToTeam': '保存到 Team',
@@ -258,6 +260,12 @@
       'compose.errorAddressInvalid': '错误：地址 "{addr}" 不存在，请选择有效的 Agent。',
       'compose.errorPrefix': '错误：',
       'compose.clickPreview': '点击预览',
+      'compose.memoryBlockTitle': '团队记忆',
+      'compose.memorySource': '来源',
+      'compose.memoryTeam': '团队',
+      'compose.memoryReference': '记忆引用',
+      'compose.memoryUntitled': '未命名记忆',
+      'compose.memoryNoContent': '暂无内容',
 
       // --- Stats ---
       'stats.title': 'Agent 统计',
@@ -702,6 +710,8 @@
       // --- Inbox ---
       'inbox.title': 'Inbox: {address}',
       'inbox.empty': 'No messages.',
+      'inbox.teamFilter': 'By Team',
+      'inbox.allTeams': 'All Teams',
       'inbox.copyMd': 'Copy as Markdown',
       'inbox.copyMdTitle': 'Copy this message as Markdown',
       'inbox.saveToTeam': 'Save to Team',
@@ -751,6 +761,12 @@
       'compose.errorAddressInvalid': 'Error: Address "{addr}" does not exist. Please select a valid agent.',
       'compose.errorPrefix': 'Error: ',
       'compose.clickPreview': 'Click to preview',
+      'compose.memoryBlockTitle': 'Team Memory',
+      'compose.memorySource': 'Source',
+      'compose.memoryTeam': 'Team',
+      'compose.memoryReference': 'Memory reference',
+      'compose.memoryUntitled': 'Untitled memory',
+      'compose.memoryNoContent': 'No content',
 
       // --- Stats ---
       'stats.title': 'Agent Statistics',

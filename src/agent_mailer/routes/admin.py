@@ -488,6 +488,7 @@ async def purge_thread(thread_id: str, request: Request, user: dict = Depends(ge
 async def admin_inbox(
     address: str, request: Request, all: bool = False,
     page: int | None = Query(default=None, ge=1), page_size: int = Query(default=20, ge=1, le=100),
+    from_team_id: str | None = Query(default=None),
     user: dict = Depends(get_current_user),
 ):
     db = request.app.state.db
@@ -498,16 +499,26 @@ async def admin_inbox(
         raise HTTPException(status_code=404, detail="Address not found")
     vis = INBOX_VISIBILITY_SQL
     where = f"to_agent = ? AND {vis}" if all else f"to_agent = ? AND is_read = 0 AND {vis}"
+    params = [address]
+
+    if from_team_id:
+        cursor = await db.execute(
+            "SELECT id FROM teams WHERE id = ? AND user_id = ?", (from_team_id, user["id"])
+        )
+        if not await cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Team not found")
+        where += " AND from_agent IN (SELECT address FROM agents WHERE user_id = ? AND team_id = ?)"
+        params.extend([user["id"], from_team_id])
 
     if page is not None:
-        cursor = await db.execute(f"SELECT COUNT(*) AS cnt FROM messages WHERE {where}", (address,))
+        cursor = await db.execute(f"SELECT COUNT(*) AS cnt FROM messages WHERE {where}", tuple(params))
         cnt_row = await cursor.fetchone()
         total = cnt_row["cnt"] if cnt_row else 0
         total_pages = max(1, math.ceil(total / page_size))
         offset = (page - 1) * page_size
         cursor = await db.execute(
             f"SELECT * FROM messages WHERE {where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
-            (address, page_size, offset),
+            (*params, page_size, offset),
         )
         rows = await cursor.fetchall()
         return PaginatedInboxResponse(
@@ -515,16 +526,9 @@ async def admin_inbox(
             total=total, page=page, page_size=page_size, total_pages=total_pages,
         )
     else:
-        if all:
-            cursor = await db.execute(
-                f"SELECT * FROM messages WHERE to_agent = ? AND {vis} ORDER BY created_at DESC",
-                (address,),
-            )
-        else:
-            cursor = await db.execute(
-                f"SELECT * FROM messages WHERE to_agent = ? AND is_read = 0 AND {vis} ORDER BY created_at DESC",
-                (address,),
-            )
+        cursor = await db.execute(
+            f"SELECT * FROM messages WHERE {where} ORDER BY created_at DESC", tuple(params)
+        )
         rows = await cursor.fetchall()
         return [_row_to_response(row) for row in rows]
 
