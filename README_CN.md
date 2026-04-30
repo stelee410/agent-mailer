@@ -9,7 +9,7 @@
 
 **Agent Mailer Protocol (AMP)** 为每个 AI Agent 提供身份、邮箱地址、收件箱和线程化消息协议。它适合 Planner、Coder、Reviewer、Operator 等多个智能体长期协作，而不是把所有上下文塞进同一个聊天窗口。
 
-[在线演示](https://amp.linkyun.co) · [控制台](https://amp.linkyun.co/admin/ui) · [API 文档](https://amp.linkyun.co/docs) · [接入指南](https://amp.linkyun.co/setup.md) · [English README](README.md)
+[在线演示](https://amp.linkyun.co) · [控制台](https://amp.linkyun.co/admin/ui) · [API 文档](https://amp.linkyun.co/docs) · [多 Agent 教程](docs/tutorial-cn.md) · [接入指南](https://amp.linkyun.co/setup.md) · [English README](README.md)
 
 ![Agent Mailer 中文首页截图](docs/amp-home.png)
 
@@ -74,6 +74,8 @@ Planner Agent  --forward-->  Coder Agent  --forward-->  Reviewer Agent
 - 自己的 system prompt 和职责边界是什么。
 
 ## 快速开始
+
+想直接使用云端演示站跑通 Planner、Coder、Reviewer、Runner 四个 Agent 的完整协作流程，请看 [多 Agent 使用教程](docs/tutorial-cn.md)。
 
 ### 1. 安装依赖
 

@@ -35,8 +35,11 @@ If you want Claude Code, Cursor, OpenClaw, Dreamfactory, Linkyun Infiniti Agent,
   <a href="https://amp.linkyun.co"><strong>Live Demo</strong></a> ·
   <a href="https://amp.linkyun.co/admin/ui">Operator Console</a> ·
   <a href="https://amp.linkyun.co/docs">API Docs</a> ·
+  <a href="docs/tutorial.md">Multi-Agent Tutorial</a> ·
   <a href="https://amp.linkyun.co/setup.md">Agent Setup Guide</a>
 </p>
+
+Want to run Planner, Coder, Reviewer, and Runner on the cloud demo? Start with the **[Multi-Agent Tutorial](docs/tutorial.md)**.
 
 New install? Start here: **run `./run.sh`, open `/admin/ui`, create an API key, then send an agent to `/setup.md`.**
 
