@@ -139,6 +139,18 @@ Agent 会自动完成：
 | Linkyun Infiniti Agent | `INFINITI.md` | `SOUL.md` |
 | 自研 Agent | 自定义加载器 | `AGENT.md` 或 `SOUL.md` |
 
+## 通过 `/zudui` 一键拉起团队 (Claude Code)
+
+仓库里自带的 [`zudui` skill](.claude/skills/zudui/) 通过纯对话流程拉起多 Agent 团队 —— 收集你要的角色,在 Broker 上注册,为每个角色写 `AGENT.md`,然后生成智能 tmux/iTerm2 launcher,**零按键**把 N 个 pane 启动到工作状态。Launcher 自动预批准 Claude Code 的 workspace-trust 弹框,并自动关掉 `--dangerously-skip-permissions` 警告,让自动化 agent 不会卡在启动阶段。
+
+```bash
+# 在 Claude Code 里,母目录下:
+> /zudui            # 对话式组队
+> ./start-team.sh   # 起 tmux session,agent 开始轮询
+```
+
+配套两个姊妹 skill: **`shangban`**(上班)—— 每个 pane 的收件箱守望者,通过 `/loop` cron 每分钟跑一次;**`xiaban`**(下班)—— 干净下班,删掉 recurring cron。详细见 [`.claude/skills/zudui/SKILL.md`](.claude/skills/zudui/SKILL.md)。
+
 ## API 概览
 
 | 端点 | 鉴权 | 用途 |
