@@ -622,9 +622,7 @@ async function renderInbox() {
 
   const existingList = main.querySelector('.msg-list');
   if (existingList) {
-    existingList.innerHTML = msgs.length === 0
-      ? ''
-      : msgs.map(m => renderMsgItem(m)).join('');
+    diffList(existingList, msgs, m => m.id, renderMsgItem);
     const emptyEl = main.querySelector('.inbox-empty');
     if (msgs.length === 0 && !emptyEl) {
       existingList.insertAdjacentHTML('afterend', `<div class="empty inbox-empty">${esc(t('inbox.empty'))}</div>`);
@@ -632,8 +630,19 @@ async function renderInbox() {
       emptyEl.remove();
     }
     const oldPag = main.querySelector('.pagination');
-    if (oldPag) oldPag.outerHTML = paginationHtml;
-    else if (paginationHtml) main.querySelector('.card').insertAdjacentHTML('beforeend', paginationHtml);
+    if (oldPag) {
+      if (paginationHtml === '') {
+        oldPag.remove();
+      } else if (oldPag.dataset.fp !== _fnv1aHash(paginationHtml)) {
+        oldPag.outerHTML = paginationHtml;
+        const fresh = main.querySelector('.pagination');
+        if (fresh) fresh.dataset.fp = _fnv1aHash(paginationHtml);
+      }
+    } else if (paginationHtml) {
+      main.querySelector('.card').insertAdjacentHTML('beforeend', paginationHtml);
+      const added = main.querySelector('.pagination');
+      if (added) added.dataset.fp = _fnv1aHash(paginationHtml);
+    }
     hydrateMarkdownBodies(main);
     return;
   }
