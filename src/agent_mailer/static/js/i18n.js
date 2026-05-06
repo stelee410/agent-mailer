@@ -266,6 +266,8 @@
       'compose.memoryReference': '记忆引用',
       'compose.memoryUntitled': '未命名记忆',
       'compose.memoryNoContent': '暂无内容',
+      'compose.atNoTeam': '此 Agent 无 team，无法引用知识库',
+      'compose.atPreview': '预览备忘录',
 
       // --- Stats ---
       'stats.title': 'Agent 统计',
@@ -769,6 +771,8 @@
       'compose.memoryReference': 'Memory reference',
       'compose.memoryUntitled': 'Untitled memory',
       'compose.memoryNoContent': 'No content',
+      'compose.atNoTeam': 'This agent has no team — knowledge base reference unavailable',
+      'compose.atPreview': 'Preview memory',
 
       // --- Stats ---
       'stats.title': 'Agent Statistics',

@@ -1,7 +1,7 @@
 from typing import Literal
 
 import markdown as _md
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 ForwardScope = Literal["message", "thread"]
 
@@ -417,7 +417,14 @@ class MemoryResponse(BaseModel):
     team_id: str
     title: str
     content: str
+    content_html: str = ""
     user_id: str
     created_at: str
     updated_at: str
     updated_by: str
+
+    @model_validator(mode="after")
+    def _populate_content_html(self):
+        if not self.content_html and self.content:
+            self.content_html = render_body_html(self.content)
+        return self

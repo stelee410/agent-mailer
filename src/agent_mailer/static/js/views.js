@@ -123,6 +123,31 @@ function previewImage(url, filename) {
   document.body.appendChild(overlay);
 }
 
+function previewMemory(memory) {
+  const overlay = document.createElement('div');
+  overlay.className = 'memory-preview-overlay';
+  const title = memory && memory.title ? memory.title : t('compose.memoryUntitled');
+  const html = memory && memory.content_html ? memory.content_html : '';
+  overlay.innerHTML = `
+    <div class="memory-preview-modal">
+      <div class="memory-preview-header">
+        <span class="memory-preview-title">${esc(title)}</span>
+        <button class="compose-modal-close" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div class="memory-preview-body markdown-body" data-md-html="${mdDataAttr(html)}"></div>
+    </div>`;
+  hydrateMarkdownBodies(overlay);
+  function close() {
+    overlay.remove();
+    document.removeEventListener('keydown', onKey);
+  }
+  function onKey(e) { if (e.key === 'Escape') close(); }
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector('.compose-modal-close').addEventListener('click', close);
+  document.addEventListener('keydown', onKey);
+  document.body.appendChild(overlay);
+}
+
 // --- Threads view ---
 
 async function showThreads(page) {
@@ -1137,7 +1162,7 @@ function hydrateComposeAtReference() {
   if (!textarea || !dropdown) return;
   let atActive = false;
   let atStartPos = -1;
-  let cachedMemories = null;
+  let cachedMemoriesByTeam = {};
 
   function summarizeMemoryContent(content) {
     const text = String(content || '')
@@ -1178,24 +1203,31 @@ function hydrateComposeAtReference() {
     return prefix + block + suffix;
   }
 
+  function currentComposeTeamId() {
+    const toInput = document.getElementById('composeTo');
+    const addr = toInput ? (toInput.value || '').trim() : '';
+    if (!addr) return null;
+    const agent = agents.find(a => a.address === addr);
+    return (agent && agent.team_id) ? agent.team_id : null;
+  }
+
   async function loadMemories() {
-    if (cachedMemories !== null) return cachedMemories;
-    try {
-      if (teamsData.length === 0) await fetchTeams();
-      const all = [];
-      for (const team of teamsData) {
-        const mems = await fetchTeamMemories(team.id);
-        for (const m of mems) all.push({ ...m, team_name: team.name });
-      }
-      cachedMemories = all;
-    } catch (e) {
-      cachedMemories = [];
+    const teamId = currentComposeTeamId();
+    if (!teamId) return { items: [], noTeam: true };
+    if (cachedMemoriesByTeam[teamId]) {
+      return { items: cachedMemoriesByTeam[teamId], noTeam: false };
     }
-    return cachedMemories;
+    try {
+      const mems = await fetchTeamMemories(teamId);
+      cachedMemoriesByTeam[teamId] = mems;
+      return { items: mems, noTeam: false };
+    } catch (e) {
+      return { items: [], noTeam: false };
+    }
   }
 
   async function showDropdown(filter) {
-    const memories = await loadMemories();
+    const { items: memories, noTeam } = await loadMemories();
     const q = (filter || '').toLowerCase();
 
     const imgItems = composeUploadedFiles
@@ -1212,7 +1244,7 @@ function hydrateComposeAtReference() {
       .filter(m => !q || m.title.toLowerCase().includes(q) || String(m.content || '').toLowerCase().includes(q))
       .map(m => {
         const url = location.origin + '/memories/' + m.id;
-        const meta = m.team_name ? `${t('compose.memoryTeam')}: ${m.team_name}` : t('compose.memoryReference');
+        const meta = t('compose.memoryReference');
         return `<div class="compose-at-item compose-at-memory-item" data-type="memory" data-memory-id="${esc(m.id)}" data-url="${esc(url)}" data-name="${esc(m.title)}">
           <span class="compose-at-label compose-at-label-mem">MEM</span>
           <span class="compose-at-main">
@@ -1220,15 +1252,20 @@ function hydrateComposeAtReference() {
             <span class="compose-at-summary">${esc(summarizeMemoryContent(m.content))}</span>
             <span class="compose-at-meta">${esc(meta)}</span>
           </span>
+          <button type="button" class="compose-at-eye" data-memory-id="${esc(m.id)}" title="${esc(t('compose.atPreview'))}" aria-label="${esc(t('compose.atPreview'))}">&#128065;</button>
         </div>`;
       });
 
+    const noTeamItem = noTeam
+      ? `<div class="compose-at-info">${esc(t('compose.atNoTeam'))}</div>`
+      : '';
+
     const allItems = imgItems.concat(memItems);
-    if (allItems.length === 0) {
+    if (allItems.length === 0 && !noTeamItem) {
       dropdown.classList.remove('visible');
       return;
     }
-    dropdown.innerHTML = allItems.join('');
+    dropdown.innerHTML = allItems.join('') + noTeamItem;
     dropdown.classList.add('visible');
   }
 
@@ -1252,8 +1289,24 @@ function hydrateComposeAtReference() {
     }
   });
 
+  function findMemoryById(memoryId) {
+    for (const tid of Object.keys(cachedMemoriesByTeam)) {
+      const hit = (cachedMemoriesByTeam[tid] || []).find(m => String(m.id) === String(memoryId));
+      if (hit) return hit;
+    }
+    return null;
+  }
+
   dropdown.addEventListener('mousedown', (e) => {
     e.preventDefault();
+    const eye = e.target.closest('.compose-at-eye');
+    if (eye) {
+      e.stopPropagation();
+      const memId = eye.dataset.memoryId;
+      const memory = findMemoryById(memId);
+      if (memory) previewMemory(memory);
+      return;
+    }
     const item = e.target.closest('.compose-at-item');
     if (!item) return;
     const type = item.dataset.type;
@@ -1265,7 +1318,7 @@ function hydrateComposeAtReference() {
     const before = textarea.value.substring(0, atStartPos - 1);
     const after = textarea.value.substring(pos);
     const memory = type === 'memory'
-      ? (cachedMemories || []).find(m => String(m.id) === String(memoryId))
+      ? findMemoryById(memoryId)
       : null;
     const insert = type === 'image'
       ? `![${name}](${url})`
