@@ -154,7 +154,8 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); heig
 .msg-item-head { cursor: pointer; }
 .msg-item:last-child { border-bottom: none; }
 .msg-item.unread { border-left: 3px solid var(--primary); }
-.msg-item.read { border-left: 3px solid transparent; opacity: 0.6; }
+.msg-item.read { border-left: 3px solid transparent; }
+.msg-item.read .msg-item-head { opacity: 0.6; }
 .msg-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
 .msg-from { font-weight: 500; font-size: 13px; color: var(--text); font-family: var(--mono); }
 .msg-time { font-size: 11px; color: var(--muted); font-family: var(--mono); }
