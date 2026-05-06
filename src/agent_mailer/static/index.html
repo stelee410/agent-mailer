@@ -174,7 +174,17 @@ let agents = [];
 let statsData = [];
 let threadsData = [];
 let trashedMessagesData = [];
-let sidebarMode = 'agents';
+let sidebarMode = (function() {
+  try {
+    var saved = localStorage.getItem('amp-sidebar-mode');
+    if (saved === 'agents' || saved === 'teams') {
+      var sel = document.getElementById('sidebarModeSelect');
+      if (sel) sel.value = saved;
+      return saved;
+    }
+  } catch (e) { /* ignore */ }
+  return 'agents';
+})();
 let currentView = null;
 let expandedMsg = null;
 let pollTimer = null;
@@ -194,6 +204,6 @@ let currentUser = null;
 <script src="/static/js/views.js?v=54"></script>
 <script src="/static/js/teams.js?v=47"></script>
 <script src="/static/js/tags.js?v=38"></script>
-<script src="/static/js/events.js?v=43"></script>
+<script src="/static/js/events.js?v=44"></script>
 </body>
 </html>

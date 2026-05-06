@@ -27,6 +27,7 @@ function toggleNavPanel() {
 // --- Event listeners ---
 document.getElementById('sidebarModeSelect').addEventListener('change', async (e) => {
   sidebarMode = e.target.value;
+  try { localStorage.setItem('amp-sidebar-mode', sidebarMode); } catch (err) { /* ignore */ }
   filterTags.clear();
   updateFilterBtn();
   clearNav();
