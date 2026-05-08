@@ -264,11 +264,17 @@ async def reactivate_api_key(
 async def delete_api_key(
     request: Request, key_id: str, user: dict = Depends(get_current_user)
 ):
-    """Revoke (soft-delete) an API key. Row is kept for audit; subsequent calls return 401.
+    """Permanently remove an API key.
 
-    Refuses with 409 when the key is bound to an active agent — agent-bound keys
-    have ``name = 'agent:{agent_id}'`` and silently disabling one would break the
-    agent's auth without warning the operator.
+    Use ``POST /api-keys/{id}/deactivate`` for the recoverable variant — this
+    endpoint hard-deletes the row so it disappears from the user's list. The
+    ``key_hash`` is freed for reuse and any in-flight calls authenticating with
+    that key fall through to the standard 401 path (``dependencies.py`` filters
+    on ``is_active = 1``, and a missing row is just as authoritative).
+
+    Refuses with 409 when the key is bound to an active agent — agent-bound
+    keys have ``name = 'agent:{agent_id}'`` and silently revoking one would
+    break the agent's auth without warning the operator.
     """
     db = request.app.state.db
     cursor = await db.execute(
@@ -302,6 +308,6 @@ async def delete_api_key(
                 },
             )
 
-    await db.execute("UPDATE api_keys SET is_active = 0 WHERE id = ?", (key_id,))
+    await db.execute("DELETE FROM api_keys WHERE id = ?", (key_id,))
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
