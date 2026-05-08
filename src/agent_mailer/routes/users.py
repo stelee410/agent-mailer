@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import JSONResponse
 
 from agent_mailer.auth import (
     create_session_token,
@@ -263,13 +264,44 @@ async def reactivate_api_key(
 async def delete_api_key(
     request: Request, key_id: str, user: dict = Depends(get_current_user)
 ):
-    """Revoke (soft-delete) an API key. Row is kept for audit; subsequent calls return 401."""
+    """Revoke (soft-delete) an API key. Row is kept for audit; subsequent calls return 401.
+
+    Refuses with 409 when the key is bound to an active agent — agent-bound keys
+    have ``name = 'agent:{agent_id}'`` and silently disabling one would break the
+    agent's auth without warning the operator.
+    """
     db = request.app.state.db
     cursor = await db.execute(
         "SELECT * FROM api_keys WHERE id = ? AND user_id = ?", (key_id, user["id"])
     )
-    if await cursor.fetchone() is None:
+    key_row = await cursor.fetchone()
+    if key_row is None:
         raise HTTPException(status_code=404, detail="API key not found")
+
+    key_name = key_row["name"] or ""
+    if key_name.startswith("agent:"):
+        agent_id = key_name[len("agent:"):]
+        cursor = await db.execute(
+            "SELECT id, name, address, status FROM agents WHERE id = ? AND user_id = ?",
+            (agent_id, user["id"]),
+        )
+        agent_row = await cursor.fetchone()
+        if agent_row and (agent_row["status"] or "active") != "deleted":
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "error": "api_key_in_use",
+                    "message": "API key is bound to an active agent",
+                    "agents": [
+                        {
+                            "id": agent_row["id"],
+                            "name": agent_row["name"],
+                            "address": agent_row["address"],
+                        }
+                    ],
+                },
+            )
+
     await db.execute("UPDATE api_keys SET is_active = 0 WHERE id = ?", (key_id,))
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -270,6 +270,11 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); heig
 .compose-at-eye { background: none; border: none; padding: 4px 6px; cursor: pointer; color: var(--muted); font-size: 14px; line-height: 1; border-radius: 4px; flex-shrink: 0; }
 .compose-at-eye:hover { color: var(--accent-bright); background: var(--sidebar-hover); }
 .compose-at-info { padding: 10px 12px; font-size: 12px; color: var(--muted); font-style: italic; cursor: default; }
+.apikey-inuse-list { list-style: none; margin: 8px 0 0; padding: 0; max-height: 240px; overflow-y: auto; border: 1px solid var(--border-subtle); border-radius: 6px; }
+.apikey-inuse-item { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; border-bottom: 1px solid var(--border-subtle); }
+.apikey-inuse-item:last-child { border-bottom: none; }
+.apikey-inuse-name { font-weight: 600; font-size: 13px; color: var(--text); }
+.apikey-inuse-addr { font-family: var(--mono); font-size: 11px; color: var(--muted); }
 .btn { padding: 8px 20px; border: none; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; font-family: var(--mono); letter-spacing: 0.3px; }
 .btn-primary { background: var(--primary); color: #fff; }
 .btn-primary:hover { background: #6d28d9; box-shadow: 0 0 20px rgba(124,58,237,0.3); }

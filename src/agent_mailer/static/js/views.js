@@ -1715,12 +1715,70 @@ async function reactivateApiKey(keyId, keyName) {
 async function deleteApiKey(keyId, keyName) {
   const ok = await showConfirm(t('apikeys.confirmDeleteTitle'), t('apikeys.confirmDelete', { name: keyName }), t('common.delete'));
   if (!ok) return;
+  let resp;
   try {
-    await api(`/users/api-keys/${encodeURIComponent(keyId)}`, { method: 'DELETE' });
-    await renderApiKeys();
+    resp = await fetch(BASE + `/users/api-keys/${encodeURIComponent(keyId)}`, {
+      credentials: 'same-origin',
+      method: 'DELETE',
+    });
   } catch (e) {
-    alert(t('common.failedPrefix') + e.message);
+    alert(t('common.failedPrefix') + (e && e.message ? e.message : ''));
+    return;
   }
+  if (resp.status === 401) {
+    clearSessionCookie();
+    showLoginPage();
+    return;
+  }
+  if (resp.status === 204 || resp.status === 200) {
+    await renderApiKeys();
+    return;
+  }
+  if (resp.status === 409) {
+    let body = null;
+    try { body = await resp.json(); } catch (e) { /* ignore */ }
+    if (body && Array.isArray(body.agents) && body.agents.length > 0) {
+      showApiKeyInUseModal(body.agents);
+      return;
+    }
+  }
+  let detail = '';
+  try {
+    const errBody = await resp.json();
+    detail = (errBody && (errBody.message || errBody.detail)) || '';
+  } catch (e) { /* empty/non-JSON body */ }
+  const status = `${resp.status} ${resp.statusText || ''}`.trim();
+  alert(t('apikeys.deleteFailedGeneric', { status, detail: detail || resp.statusText || '' }));
+}
+
+function showApiKeyInUseModal(agents) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay visible';
+  const items = agents.map(a => `
+    <li class="apikey-inuse-item">
+      <span class="apikey-inuse-name">${esc(a.name || '')}</span>
+      <span class="apikey-inuse-addr">${esc(a.address || '')}</span>
+    </li>`).join('');
+  overlay.innerHTML = `
+    <div class="modal-box">
+      <div class="modal-title">${esc(t('apikeys.inUseTitle'))}</div>
+      <div class="modal-body">
+        <p>${esc(t('apikeys.inUseBody'))}</p>
+        <ul class="apikey-inuse-list">${items}</ul>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-confirm" type="button">${esc(t('common.ok'))}</button>
+      </div>
+    </div>`;
+  function close() {
+    overlay.remove();
+    document.removeEventListener('keydown', onKey);
+  }
+  function onKey(e) { if (e.key === 'Escape') close(); }
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector('.modal-confirm').addEventListener('click', close);
+  document.addEventListener('keydown', onKey);
+  document.body.appendChild(overlay);
 }
 
 async function changePassword() {
