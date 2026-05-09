@@ -8,6 +8,7 @@ from typing import Optional
 import click
 
 from agent_mailer_cli.config import ConfigError, config_file_path
+from agent_mailer_cli.consistency import check_agent_id_consistency
 from agent_mailer_cli.security import (
     SecurityError,
     check_workdir_security,
@@ -32,6 +33,7 @@ def run(
     max_retries: Optional[int],
     no_interactive: bool,
     dry_run: bool,
+    ignore_agent_md_mismatch: bool = False,
 ) -> int:
     workdir_path = (workdir or Path.cwd()).resolve()
     cli_overrides: dict[str, object] = {
@@ -77,6 +79,19 @@ def run(
     except SecurityError as exc:
         click.echo(f"❌ {exc}", err=True)
         return 2
+
+    # SPEC §15.6 invariant #5: AGENT.md ↔ config.toml agent_id must match.
+    consistency = check_agent_id_consistency(workdir_path, cfg)
+    if not consistency.ok:
+        if ignore_agent_md_mismatch:
+            click.echo(
+                f"⚠️  --ignore-agent-md-mismatch set; bypassing the SPEC §15.6 "
+                f"check.\n{consistency.detail}",
+                err=True,
+            )
+        else:
+            click.echo(f"❌ {consistency.detail}", err=True)
+            return 2
 
     if not gitignore_covers(workdir_path) and (workdir_path / ".git").exists():
         click.echo(

@@ -12,6 +12,7 @@ import click
 
 from agent_mailer_cli.broker import BrokerClient, PermanentBrokerError, TransientBrokerError
 from agent_mailer_cli.config import config_file_path, load_config
+from agent_mailer_cli.consistency import check_agent_id_consistency
 
 
 @dataclass
@@ -83,6 +84,15 @@ def run(workdir: Optional[Path]) -> int:
     if cfg and not cfg.missing_runtime_fields():
         ok, detail = asyncio.run(_check_broker(cfg.broker_url, cfg.api_key, cfg.agent_id))
         checks.append(CheckResult("broker reachable + api_key valid", ok, detail))
+
+    # 5b. SPEC §15.6 invariant #5: AGENT.md ↔ config.toml agent_id consistency.
+    if cfg:
+        consistency = check_agent_id_consistency(workdir_path, cfg)
+        checks.append(CheckResult(
+            "AGENT.md ↔ config.toml agent_id consistent",
+            consistency.ok,
+            consistency.detail.splitlines()[0] if consistency.ok else consistency.detail,
+        ))
 
     # 6. .gitignore covers .agent-mailer/ (only if .git present)
     if (workdir_path / ".git").exists():

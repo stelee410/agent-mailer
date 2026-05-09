@@ -6,11 +6,13 @@ api_key) into the prompt; user-controllable fields (subject, body,
 attachments) must be fetched by claude itself via GET so they cross a
 clear data boundary instead of bleeding into the instruction stream.
 
-M2 only ships the "fresh thread" template. The "resume" branch is
-prepared but currently unused — `is_resume` is wired through so M3 can
-flip it on without touching this module's public surface.
+M3 enables session resume. `build_prompt` now accepts a
+`stale_session_note` to support the §11.3 fallback when a thread's
+session is too old to resume.
 """
 from __future__ import annotations
+
+from typing import Optional
 
 from agent_mailer_cli.broker import InboxMessage
 
@@ -53,14 +55,38 @@ Steps:
 """
 
 
-def build_prompt(msg: InboxMessage, *, broker_url: str, is_resume: bool = False) -> str:
+def build_prompt(
+    msg: InboxMessage,
+    *,
+    broker_url: str,
+    is_resume: bool = False,
+    stale_session_note: Optional[str] = None,
+) -> str:
     # SPEC §22: msg.subject and msg.raw must never reach this format dict —
     # they are user-controlled fields that would create a prompt-injection
     # vector. claude fetches them itself via GET /messages/{msg_id}.
     template = RESUME_TEMPLATE if is_resume else FRESH_TEMPLATE
-    return template.format(
+    body = template.format(
         msg_id=msg.id,
         thread_id=msg.thread_id,
         from_address=msg.from_agent,
         broker_url=broker_url.rstrip("/"),
+    )
+    if stale_session_note:
+        body = body + "\nNOTE: " + stale_session_note + "\n"
+    return body
+
+
+def build_stale_session_note(*, age_days: int, turn_count: int, memory_dir: str,
+                             thread_id: str) -> str:
+    """SPEC §11.3 fallback note inserted when a session is too old to resume.
+
+    `memory_dir` is the relative path inside the workdir (typically
+    `.agent-mailer/memory`). thread_id selects the per-thread handoff file.
+    """
+    return (
+        f"Prior claude session for this thread expired "
+        f"(age={age_days}d, turns={turn_count}). "
+        f"Read {memory_dir}/{thread_id}.md for handoff notes from prior "
+        f"sessions before starting fresh."
     )

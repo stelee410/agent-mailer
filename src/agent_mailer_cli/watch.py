@@ -25,7 +25,8 @@ from agent_mailer_cli.claude_runner import (
     run_claude,
 )
 from agent_mailer_cli.config import Config
-from agent_mailer_cli.prompt import build_prompt
+from agent_mailer_cli.prompt import build_prompt, build_stale_session_note
+from agent_mailer_cli.sessions import SessionStore, is_session_fresh
 from agent_mailer_cli.state import LocalState
 
 log = logging.getLogger("agent_mailer_cli.watch")
@@ -44,6 +45,7 @@ async def watch_loop(cfg: Config, *, dry_run: bool = False) -> int:
         raise WatchAborted("internal error: cfg.workdir not set")
 
     state = LocalState(cfg.cfg_dir)
+    sessions = SessionStore(cfg.cfg_dir)
     state.append_log("watch_started", agent=cfg.agent_name, address=cfg.address,
                      dry_run=dry_run)
 
@@ -111,14 +113,14 @@ async def watch_loop(cfg: Config, *, dry_run: bool = False) -> int:
                              new=len(new_msgs))
 
             for msg in new_msgs:
-                await _handle_message(msg, cfg, state, dry_run=dry_run)
+                await _handle_message(msg, cfg, state, sessions, dry_run=dry_run)
 
             interval = cfg.poll_interval_active if new_msgs else cfg.poll_interval_idle
             await sleep_with_jitter(interval)
 
 
 async def _handle_message(msg: InboxMessage, cfg: Config, state: LocalState,
-                          *, dry_run: bool) -> None:
+                          sessions: SessionStore, *, dry_run: bool) -> None:
     state.set_inflight(msg.id, msg.thread_id)
     state.append_log("process_start", msg_id=msg.id, thread_id=msg.thread_id,
                      subject=msg.subject, from_agent=msg.from_agent, dry_run=dry_run)
@@ -135,11 +137,44 @@ async def _handle_message(msg: InboxMessage, cfg: Config, state: LocalState,
                    f"no claude spawned.")
         return
 
-    prompt = build_prompt(msg, broker_url=cfg.broker_url, is_resume=False)
+    # SPEC §11: decide resume vs fresh based on sessions.json + freshness.
+    existing = sessions.get(msg.thread_id)
+    is_resume = False
+    stale_note: Optional[str] = None
+    resume_session_id: Optional[str] = None
+    if existing is not None:
+        if is_session_fresh(
+            existing,
+            max_age_days=cfg.session_max_age_days,
+            max_turns=cfg.session_max_turns,
+        ):
+            is_resume = True
+            resume_session_id = existing.session_id
+        else:
+            # §11.3 fallback: feed claude a note pointing at handoff memory.
+            age_days = max(1, existing.age().days)
+            stale_note = build_stale_session_note(
+                age_days=age_days,
+                turn_count=existing.turn_count,
+                memory_dir=".agent-mailer/memory",
+                thread_id=msg.thread_id,
+            )
+
+    prompt = build_prompt(
+        msg, broker_url=cfg.broker_url, is_resume=is_resume,
+        stale_session_note=stale_note,
+    )
     cmd = build_cmd(
         claude_command=cfg.claude_command,
         prompt=prompt,
         permission_mode=cfg.permission_mode or "acceptEdits",
+        session_id=resume_session_id,
+    )
+    state.append_log(
+        "claude_spawn", msg_id=msg.id, thread_id=msg.thread_id,
+        is_resume=is_resume,
+        resume_session_id=resume_session_id,
+        stale_session=stale_note is not None,
     )
 
     try:
@@ -180,6 +215,12 @@ async def _handle_message(msg: InboxMessage, cfg: Config, state: LocalState,
         state.append_log("claude_output_unparsed", msg_id=msg.id,
                          parse_error=result.parse_error,
                          stdout_tail=result.stdout[-400:])
+
+    # SPEC §15.6 invariant #2: only write to sessions.json AFTER a clean exit
+    # AND a parseable session_id. Otherwise the map would point at a session
+    # that may not contain this turn.
+    if session_id:
+        sessions.record_success(msg.thread_id, session_id)
 
     state.add_processed(msg.id)
     state.save_cursor(msg.id)

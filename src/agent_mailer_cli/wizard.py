@@ -176,8 +176,19 @@ def _resolve_permission_mode(
 
     click.echo("")
     click.echo(PERMISSION_MENU)
+    # SPEC §15.6 invariant #8 / §8.3: permission_mode must be EXPLICITLY chosen.
+    # No default — empty input re-prompts. This prevents silent privilege
+    # escalation (e.g. current="plan" + user-Enter would otherwise default to
+    # acceptEdits, broadening permissions without consent).
     while True:
-        choice = click.prompt("> ", type=str, default="1", show_default=False).strip()
+        choice = click.prompt("> ", type=str, default="", show_default=False).strip()
+        if not choice:
+            click.echo(
+                "Please enter 1, 2, or 3 — empty input is not accepted "
+                "(no silent default).",
+                err=True,
+            )
+            continue
         if choice in ("1", "acceptEdits"):
             return "acceptEdits"
         if choice in ("2", "bypassPermissions"):

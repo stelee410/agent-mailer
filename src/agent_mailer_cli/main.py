@@ -49,10 +49,14 @@ def cli() -> None:
               help="Refuse to prompt; missing fields cause exit 2.")
 @click.option("--dry-run", is_flag=True, default=False,
               help="Poll only; do not spawn claude. Useful for debugging connectivity.")
+@click.option("--ignore-agent-md-mismatch", is_flag=True, default=False,
+              help="Skip the SPEC §15.6 #5 check that AGENT.md and config.toml "
+                   "agree on agent_id. Use only for fixtures/tests.")
 def watch(workdir: Optional[Path], broker_url: Optional[str], api_key: Optional[str],
           agent_id: Optional[str], address: Optional[str], permission_mode: Optional[str],
           poll_interval_idle: Optional[int], poll_interval_active: Optional[int],
-          max_retries: Optional[int], no_interactive: bool, dry_run: bool) -> None:
+          max_retries: Optional[int], no_interactive: bool, dry_run: bool,
+          ignore_agent_md_mismatch: bool) -> None:
     code = watch_cmd.run(
         workdir=workdir,
         broker_url=broker_url,
@@ -65,6 +69,7 @@ def watch(workdir: Optional[Path], broker_url: Optional[str], api_key: Optional[
         max_retries=max_retries,
         no_interactive=no_interactive,
         dry_run=dry_run,
+        ignore_agent_md_mismatch=ignore_agent_md_mismatch,
     )
     sys.exit(code)
 
@@ -144,36 +149,40 @@ def logs() -> None:
     sys.exit(2)
 
 
-@cli.group("sessions", help="(M3) Manage thread → claude session mappings.")
+@cli.group("sessions", help="Manage thread → claude session mappings.")
 def sessions_group() -> None:
     pass
 
 
 @sessions_group.command("list")
-def sessions_list() -> None:
-    click.echo("sessions list: not implemented yet (planned for M3).", err=True)
-    sys.exit(2)
+@click.option("--workdir", type=click.Path(file_okay=False, path_type=Path), default=None)
+def sessions_list(workdir: Optional[Path]) -> None:
+    from agent_mailer_cli.commands import sessions_cmd
+    sys.exit(sessions_cmd.list_sessions(workdir))
 
 
 @sessions_group.command("show")
 @click.argument("thread_id")
-def sessions_show(thread_id: str) -> None:
-    click.echo("sessions show: not implemented yet (planned for M3).", err=True)
-    sys.exit(2)
+@click.option("--workdir", type=click.Path(file_okay=False, path_type=Path), default=None)
+def sessions_show(thread_id: str, workdir: Optional[Path]) -> None:
+    from agent_mailer_cli.commands import sessions_cmd
+    sys.exit(sessions_cmd.show_session(workdir, thread_id))
 
 
 @sessions_group.command("invalidate")
 @click.argument("thread_id")
-def sessions_invalidate(thread_id: str) -> None:
-    click.echo("sessions invalidate: not implemented yet (planned for M3).", err=True)
-    sys.exit(2)
+@click.option("--workdir", type=click.Path(file_okay=False, path_type=Path), default=None)
+def sessions_invalidate(thread_id: str, workdir: Optional[Path]) -> None:
+    from agent_mailer_cli.commands import sessions_cmd
+    sys.exit(sessions_cmd.invalidate_session(workdir, thread_id))
 
 
 @sessions_group.command("prune")
 @click.option("--older-than", default="14d")
-def sessions_prune(older_than: str) -> None:
-    click.echo("sessions prune: not implemented yet (planned for M3).", err=True)
-    sys.exit(2)
+@click.option("--workdir", type=click.Path(file_okay=False, path_type=Path), default=None)
+def sessions_prune(older_than: str, workdir: Optional[Path]) -> None:
+    from agent_mailer_cli.commands import sessions_cmd
+    sys.exit(sessions_cmd.prune_sessions(workdir, older_than))
 
 
 @cli.group("memory", help="(M4) Manage agent memory files.")

@@ -143,6 +143,11 @@ async def sleep_with_jitter(seconds: float, jitter_frac: float = 0.1) -> None:
     await asyncio.sleep(delay)
 
 
-def backoff_delay(attempt: int, base: float = 30.0, cap: float = 600.0) -> float:
-    """Exponential backoff with cap. attempt is 1-indexed."""
+def backoff_delay(attempt: int, base: float = 60.0, cap: float = 600.0) -> float:
+    """Exponential backoff with cap.
+
+    attempt is 1-indexed. base=60 aligns with SPEC §9.2 ("60s ~ 600s exponential
+    backoff" on transient broker errors); first retry waits at least 60s, second
+    120s, third 240s, etc., capped at 600s.
+    """
     return min(cap, base * (2 ** (attempt - 1)))
