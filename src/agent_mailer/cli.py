@@ -149,7 +149,7 @@ async def _migrate_db(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(prog="agent-mailer", description="Agent Mailer CLI")
+    parser = argparse.ArgumentParser(prog="agent-mailer-server", description="Agent Mailer Broker CLI")
     parser.add_argument("--db", default=DB_PATH, help="Database file path")
     subparsers = parser.add_subparsers(dest="command")
 
