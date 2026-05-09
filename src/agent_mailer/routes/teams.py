@@ -4,16 +4,27 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from agent_mailer.auth import generate_api_key
+from agent_mailer.db import db_transaction
 from agent_mailer.dependencies import get_current_user
 from agent_mailer.models import (
     AgentResponse,
     TeamAddAgentRequest,
+    TeamBootstrapAgentResult,
+    TeamBootstrapRequest,
+    TeamBootstrapResponse,
     TeamCreateRequest,
     TeamDetailResponse,
     TeamResponse,
     TeamUpdateRequest,
 )
 from agent_mailer.routes.agents import _parse_agent
+from agent_mailer.routes.me_agents import (
+    _ADDRESS_LOCAL_RE,
+    _build_user_agent_md,
+    _user_domain_suffix,
+)
+from agent_mailer.utils import get_base_url
 
 router = APIRouter(prefix="/admin/teams")
 
@@ -190,3 +201,145 @@ async def remove_agent_from_team(
     await db.execute("UPDATE agents SET team_id = NULL WHERE id = ?", (agent_id,))
     await db.commit()
     return {"detail": "Agent removed from team", "team_id": team_id, "agent_id": agent_id}
+
+
+@router.post("/bootstrap", response_model=TeamBootstrapResponse)
+async def bootstrap_team(
+    req: TeamBootstrapRequest,
+    request: Request,
+    user: dict = Depends(get_current_user),
+):
+    """One-shot create: a team plus N agents in a single transaction.
+
+    Designed for the ``agent-mailer up-team`` CLI. Returns each agent's
+    one-time API key plus a rendered AGENT.md. AGENT.md uses
+    ``${AMP_API_KEY}`` instead of the inline placeholder so the file is
+    safe to drop next to a per-agent ``.env``.
+    """
+    db = request.app.state.db
+    suffix = _user_domain_suffix(user["username"])
+
+    cursor = await db.execute(
+        "SELECT id FROM teams WHERE name = ? AND user_id = ?", (req.name, user["id"])
+    )
+    if await cursor.fetchone():
+        raise HTTPException(status_code=409, detail=f"Team name '{req.name}' already exists")
+
+    seen_locals: dict[str, str] = {}
+    normalized: list[dict] = []
+    for spec in req.agents:
+        local = (spec.address_local or spec.name).strip().lower()
+        if not _ADDRESS_LOCAL_RE.match(local):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Agent '{spec.name}': address local part must be lowercase "
+                    "letters/digits/._- with alphanumeric on both ends"
+                ),
+            )
+        if local in seen_locals:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Duplicate address local '{local}' within request "
+                    f"(agents '{seen_locals[local]}' and '{spec.name}')"
+                ),
+            )
+        seen_locals[local] = spec.name
+        normalized.append({"spec": spec, "local": local, "address": f"{local}{suffix}"})
+
+    addresses = [n["address"] for n in normalized]
+    placeholders = ",".join("?" * len(addresses))
+    cursor = await db.execute(
+        f"SELECT address FROM agents WHERE address IN ({placeholders})", tuple(addresses)
+    )
+    taken = [row["address"] for row in await cursor.fetchall()]
+    if taken:
+        raise HTTPException(
+            status_code=409, detail=f"Address(es) already taken: {', '.join(taken)}"
+        )
+
+    team_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    created: list[dict] = []
+
+    async with db_transaction(db):
+        await db.execute(
+            "INSERT INTO teams (id, name, description, user_id, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (team_id, req.name, req.description, user["id"], now),
+        )
+        for n in normalized:
+            spec = n["spec"]
+            agent_id = str(uuid.uuid4())
+            raw_key, key_hash = generate_api_key()
+            key_suffix = raw_key[-6:]
+
+            await db.execute(
+                """INSERT INTO agents (id, name, address, role, description, system_prompt,
+                       tags, user_id, created_at, status, api_key_suffix, team_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)""",
+                (
+                    agent_id,
+                    spec.name,
+                    n["address"],
+                    spec.role or "",
+                    spec.description or "",
+                    spec.system_prompt or "",
+                    json.dumps(spec.tags, ensure_ascii=False),
+                    user["id"],
+                    now,
+                    key_suffix,
+                    team_id,
+                ),
+            )
+            await db.execute(
+                "INSERT INTO api_keys (id, user_id, key_hash, name, created_at, is_active) "
+                "VALUES (?, ?, ?, ?, ?, 1)",
+                (str(uuid.uuid4()), user["id"], key_hash, f"agent:{agent_id}", now),
+            )
+            created.append(
+                {
+                    "id": agent_id,
+                    "name": spec.name,
+                    "role": spec.role or "",
+                    "address": n["address"],
+                    "system_prompt": spec.system_prompt or "",
+                    "raw_key": raw_key,
+                }
+            )
+
+    broker_url = get_base_url(request)
+    results: list[TeamBootstrapAgentResult] = []
+    for c in created:
+        md = _build_user_agent_md(
+            {
+                "id": c["id"],
+                "name": c["name"],
+                "role": c["role"],
+                "address": c["address"],
+                "system_prompt": c["system_prompt"],
+            },
+            broker_url,
+            suffix,
+        ).replace("<your_api_key>", "${AMP_API_KEY}")
+        results.append(
+            TeamBootstrapAgentResult(
+                agent_id=c["id"],
+                name=c["name"],
+                address=c["address"],
+                role=c["role"],
+                api_key_plaintext=c["raw_key"],
+                agent_md=md,
+            )
+        )
+
+    team_response = TeamResponse(
+        id=team_id,
+        name=req.name,
+        description=req.description,
+        user_id=user["id"],
+        created_at=now,
+        agent_count=len(created),
+    )
+    return TeamBootstrapResponse(team=team_response, agents=results)
