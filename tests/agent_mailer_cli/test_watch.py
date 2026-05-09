@@ -297,3 +297,66 @@ def test_dry_run_writes_processed_but_not_session(tmp_path: Path) -> None:
     asyncio.run(_handle(_msg(), cfg, state, sessions, dry_run=True))
     assert "msg-A" in state.processed
     assert sessions.get("thr-A") is None  # dry-run never updates sessions
+
+
+# ---------------- v1.1 Bug A: spawn progress visibility ----------------
+
+
+def test_spawn_emits_progress_echo_before_blocking_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    """v1.1 Bug A: between '→ New message' and the (potentially 200+ second)
+    run_claude await, the user must see *some* phrase indicating claude is
+    spawning. Without it the watcher looks frozen.
+
+    Phrase-containment assertion only — we intentionally do NOT lock-in the
+    exact wording so future copy edits stay open."""
+    cfg = _make_cfg(tmp_path)
+    state = LocalState(cfg.cfg_dir)
+    sessions = SessionStore(cfg.cfg_dir)
+    saw_in_stdout: list[str] = []
+
+    async def fake_run(cmd, *, cwd, timeout_seconds=1800):  # noqa: ANN001
+        # Snapshot stdout the moment claude would start blocking — the echo
+        # MUST already be on screen by now, or the user sees nothing.
+        saw_in_stdout.append(capsys.readouterr().out)
+        return ClaudeResult(return_code=0, stdout='{"session_id":"S"}', stderr="",
+                            duration_seconds=0.1, parsed={"session_id": "S"})
+
+    monkeypatch.setattr("agent_mailer_cli.watch.run_claude", fake_run)
+    asyncio.run(_handle(_msg(), cfg, state, sessions, dry_run=False))
+
+    pre_run_output = saw_in_stdout[0]
+    assert "Spawning claude" in pre_run_output, (
+        f"watcher must show spawn progress before blocking on claude; "
+        f"stdout at run-time was: {pre_run_output!r}"
+    )
+
+
+def test_spawn_progress_distinguishes_resume_from_fresh(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The resume path is ~30s; fresh is 1-3min. The progress echo should hint
+    at the difference so the user has a sense of how long to wait. Phrase
+    containment only ('resume' / 'fresh') — wording is free to evolve."""
+    cfg = _make_cfg(tmp_path)
+    state = LocalState(cfg.cfg_dir)
+    sessions = SessionStore(cfg.cfg_dir)
+    sessions.record_success("thr-A", "S-prev")  # establish a resumable session
+
+    async def fake_run(cmd, *, cwd, timeout_seconds=1800):  # noqa: ANN001
+        return ClaudeResult(return_code=0, stdout='{"session_id":"S-prev"}', stderr="",
+                            duration_seconds=0.1, parsed={"session_id": "S-prev"})
+
+    monkeypatch.setattr("agent_mailer_cli.watch.run_claude", fake_run)
+    asyncio.run(_handle(_msg(), cfg, state, sessions, dry_run=False))
+    out_resume = capsys.readouterr().out
+    assert "Spawning claude" in out_resume
+    assert "resume" in out_resume.lower()
+
+    # Now a different thread with no prior session → fresh path.
+    asyncio.run(_handle(_msg(thread_id="thr-B", msg_id="msg-B"),
+                        cfg, state, sessions, dry_run=False))
+    out_fresh = capsys.readouterr().out
+    assert "Spawning claude" in out_fresh
+    assert "fresh" in out_fresh.lower()

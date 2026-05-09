@@ -5,6 +5,9 @@ Reviewer-mandated coverage (M2 review P1-2):
   • Scenario B (current="plan") + Enter must NOT escalate to acceptEdits
   • explicit 1/2/3 selection still works
   • --no-interactive without permission_mode aborts cleanly
+
+v1.1 hotfix coverage (Bug B):
+  • a fully-configured workdir must short-circuit run_wizard with no prompts
 """
 from __future__ import annotations
 
@@ -13,8 +16,8 @@ from typing import Optional
 
 import pytest
 
-from agent_mailer_cli.config import VALID_PERMISSION_MODES
-from agent_mailer_cli.wizard import WizardAborted, _resolve_permission_mode
+from agent_mailer_cli.config import VALID_PERMISSION_MODES, Config, save_config
+from agent_mailer_cli.wizard import WizardAborted, _resolve_permission_mode, run_wizard
 
 
 class _ScriptedPrompt:
@@ -101,3 +104,77 @@ def test_cli_override_short_circuits_prompt(monkeypatch: pytest.MonkeyPatch) -> 
     )
     assert result == "bypassPermissions"
     assert result in VALID_PERMISSION_MODES
+
+
+def _seed_complete_config(workdir: Path) -> Config:
+    cfg = Config(
+        workdir=workdir,
+        agent_id="aid-XYZ",
+        agent_name="coder",
+        address="coder@local",
+        broker_url="https://broker.test",
+        api_key="key-XYZ",
+        permission_mode="acceptEdits",
+    )
+    save_config(cfg)
+    return cfg
+
+
+def test_run_wizard_short_circuits_when_config_complete(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """v1.1 Bug B: a fully-formed config.toml + permission_mode in VALID_PERMISSION_MODES
+    must let run_wizard return immediately. Any interactive read = regression.
+
+    User-perspective assertion: if either click.prompt or click.confirm fires,
+    something is asking the user to re-enter known-good config — that is the bug.
+    """
+    seeded = _seed_complete_config(tmp_path)
+
+    def _boom(*a, **kw):  # noqa: ANN001
+        raise AssertionError("run_wizard must not prompt when config is complete")
+
+    monkeypatch.setattr("agent_mailer_cli.wizard.click.prompt", _boom)
+    monkeypatch.setattr("agent_mailer_cli.wizard.click.confirm", _boom)
+
+    cfg = run_wizard(tmp_path, cli_overrides={}, no_interactive=False)
+
+    # Returned config preserves every identity field — the user is not asked
+    # to re-confirm anything.
+    assert cfg.agent_id == seeded.agent_id
+    assert cfg.agent_name == seeded.agent_name
+    assert cfg.address == seeded.address
+    assert cfg.broker_url == seeded.broker_url
+    assert cfg.api_key == seeded.api_key
+    assert cfg.permission_mode == seeded.permission_mode
+    assert cfg.permission_mode in VALID_PERMISSION_MODES
+
+
+def test_run_wizard_still_asks_when_permission_mode_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Negative: short-circuit must NOT fire when permission_mode is empty —
+    Scenario A (the existing single-question path) must still trigger.
+    Without this guard a fresh-from-AGENT.md user could land in
+    fully_configured=True with permission_mode='' and never be asked."""
+    cfg = Config(
+        workdir=tmp_path,
+        agent_id="aid", agent_name="n", address="a@b",
+        broker_url="https://broker.test", api_key="k",
+        permission_mode="",  # missing
+    )
+    save_config(cfg)
+
+    asked: list[str] = []
+
+    def _capture(label, *a, **kw):  # noqa: ANN001
+        asked.append(label)
+        return "1"  # acceptEdits
+
+    monkeypatch.setattr("agent_mailer_cli.wizard.click.prompt", _capture)
+
+    result = run_wizard(tmp_path, cli_overrides={}, no_interactive=False)
+
+    assert result.permission_mode == "acceptEdits"
+    # The user WAS asked at least once — short-circuit correctly stayed out of the way.
+    assert asked, "permission_mode must be requested when config is incomplete"

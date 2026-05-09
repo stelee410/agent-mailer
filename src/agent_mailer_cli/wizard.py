@@ -69,6 +69,17 @@ def run_wizard(
         )
         raise WizardAborted()
 
+    fully_configured = (
+        result.config_existed
+        and not cfg.missing_runtime_fields()
+        and cfg.permission_mode in VALID_PERMISSION_MODES
+    )
+    if fully_configured:
+        # Happy path: nothing to ask. Avoid the v1 M3 P1-2 permission-mode
+        # re-prompt (its no-empty-default policy is the right default for
+        # *fresh* setup, not for re-runs of an already-complete workdir).
+        return cfg
+
     only_perm_missing = (
         result.config_existed
         and not cfg.missing_runtime_fields()

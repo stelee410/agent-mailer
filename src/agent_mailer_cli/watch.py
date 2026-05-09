@@ -217,29 +217,34 @@ async def _handle_message(msg: InboxMessage, cfg: Config, state: LocalState,
         stale_session=stale_note is not None,
     )
 
+    if is_resume:
+        click.echo("  ⏳ Spawning claude (resume session, ~30s)...", nl=False)
+    else:
+        click.echo("  ⏳ Spawning claude (fresh session, 1-3min)...", nl=False)
+
     try:
         result: ClaudeResult = await run_claude(cmd, cwd=cfg.workdir or Path.cwd())
     except ClaudeNotFoundError as exc:
-        click.echo(f"❌ {exc}", err=True)
+        click.echo(f"\n❌ {exc}", err=True)
         state.append_log("claude_not_found", msg_id=msg.id, error=str(exc))
         state.clear_inflight()
         # Bail entirely — claude missing is a config issue, not a per-message one.
         raise WatchAborted(str(exc)) from exc
     except ClaudeTimeoutError as exc:
-        click.echo(f"⚠️  claude timed out for {msg.id}: {exc}")
+        click.echo(f"\n⚠️  claude timed out for {msg.id}: {exc}")
         state.append_log("claude_timeout", msg_id=msg.id, error=str(exc))
         _record_failure(msg, retries, dead_letter, state, max_retries,
                         last_error=f"timeout: {exc}")
         return
     except ClaudeRunError as exc:
-        click.echo(f"⚠️  claude run error for {msg.id}: {exc}")
+        click.echo(f"\n⚠️  claude run error for {msg.id}: {exc}")
         state.append_log("claude_run_error", msg_id=msg.id, error=str(exc))
         _record_failure(msg, retries, dead_letter, state, max_retries,
                         last_error=f"run error: {exc}")
         return
 
     if result.return_code != 0:
-        click.echo(f"⚠️  claude exited {result.return_code} for {msg.id} — "
+        click.echo(f"\n⚠️  claude exited {result.return_code} for {msg.id} — "
                    f"will retry on next poll.")
         state.append_log("claude_failed", msg_id=msg.id,
                          return_code=result.return_code,
@@ -281,7 +286,7 @@ async def _handle_message(msg: InboxMessage, cfg: Config, state: LocalState,
     state.append_log("process_done", msg_id=msg.id, **extras)
 
     cost_str = f" (${cost:.2f})" if cost is not None else ""
-    click.echo(f"✓ Processed {msg.id} in {result.duration_seconds:.1f}s{cost_str}")
+    click.echo(f"\n✓ Processed {msg.id} in {result.duration_seconds:.1f}s{cost_str}")
 
 
 def _record_failure(
