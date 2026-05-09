@@ -142,6 +142,31 @@ def test_session_store_increments_turn_count(tmp_path: Path) -> None:
     assert second.last_used_at >= first.last_used_at
 
 
+def test_session_id_change_resets_turn_count(tmp_path: Path) -> None:
+    """Reviewer P2-1: when the same thread gets a NEW session_id (e.g. after
+    stale → fresh, or invalidate → fresh), turn_count must restart at 1.
+
+    Carrying the prior count over would double-count and prematurely trip the
+    freshness threshold for the new session, defeating §11.3's whole point.
+    """
+    store = SessionStore(tmp_path)
+    store.record_success("thr-1", "sess-OLD")
+    store.record_success("thr-1", "sess-OLD")  # turn_count → 2
+    rec_after_continue = store.get("thr-1")
+    assert rec_after_continue is not None and rec_after_continue.turn_count == 2
+
+    fresh = store.record_success("thr-1", "sess-NEW")
+    # New session_id → fresh lineage.
+    assert fresh.session_id == "sess-NEW"
+    assert fresh.turn_count == 1
+    # first_seen_at must also restart so the freshness window is accurate.
+    assert fresh.first_seen_at == fresh.last_used_at
+
+    # Same-id continuation after the reset increments normally.
+    again = store.record_success("thr-1", "sess-NEW")
+    assert again.turn_count == 2
+
+
 def test_session_store_handles_corrupt_json(tmp_path: Path) -> None:
     (tmp_path / "sessions.json").write_text("{not json")
     store = SessionStore(tmp_path)
@@ -173,6 +198,25 @@ def test_prune_drops_old_sessions(tmp_path: Path) -> None:
     assert removed == ["thr-old"]
     assert store.get("thr-new") is not None
     assert store.get("thr-old") is None
+
+
+def test_prune_with_timedelta_keeps_sub_day_precision(tmp_path: Path) -> None:
+    """Reviewer P3-1: prune --older-than 25h must drop a 26h-old record but
+    keep a 24h-old one. Previously routed through integer days -> 25h became
+    1 day, so a 24h-old record was incorrectly dropped too."""
+    twenty_six_hours_ago = (datetime.now(timezone.utc) - timedelta(hours=26)).isoformat()
+    twenty_four_hours_ago = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    (tmp_path / "sessions.json").write_text(json.dumps({
+        "thr-26h": {"session_id": "x", "last_used_at": twenty_six_hours_ago,
+                    "turn_count": 1, "first_seen_at": twenty_six_hours_ago},
+        "thr-24h": {"session_id": "y", "last_used_at": twenty_four_hours_ago,
+                    "turn_count": 1, "first_seen_at": twenty_four_hours_ago},
+    }))
+    store = SessionStore(tmp_path)
+    removed = store.prune(older_than=timedelta(hours=25))
+    assert removed == ["thr-26h"]
+    assert store.get("thr-24h") is not None
+    assert store.get("thr-26h") is None
 
 
 def test_is_session_fresh_age_threshold() -> None:

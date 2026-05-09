@@ -1,0 +1,53 @@
+# systemd user unit for the agent-mailer client runtime.
+#
+# Place this file at:
+#   ~/.config/systemd/user/agent-mailer@<workdir-name>.service
+#
+# Then point the WorkingDirectory at the agent's workdir and start it:
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now agent-mailer@coder.service
+#   journalctl --user -u agent-mailer@coder.service -f
+#
+# Stop / disable:
+#   systemctl --user disable --now agent-mailer@coder.service
+#
+# This is a TEMPLATE example, not a drop-in: edit WorkingDirectory before
+# enabling, and make sure `agent-mailer` is on the user's PATH (e.g. via
+# `uv tool install agent-mailer` or `pipx install agent-mailer`).
+
+[Unit]
+Description=Agent Mailer client runtime — %i
+Documentation=https://amp.linkyun.co
+# We use After= rather than Requires= so a missing network briefly doesn't
+# tear the unit down; agent-mailer's own backoff handles transient outages.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# REQUIRED: replace this with the absolute path to the agent's workdir.
+# This is where AGENT.md, CLAUDE.md, and .agent-mailer/ live.
+WorkingDirectory=%h/workspaces/%i
+
+# Runs `agent-mailer watch` — picks up .agent-mailer/config.toml from cwd.
+# --no-interactive prevents the wizard from blocking on tty under systemd.
+# Adjust poll intervals here if defaults (60s idle / 10s active) are wrong.
+ExecStart=%h/.local/bin/agent-mailer watch --no-interactive
+
+# If claude crashes or the watcher exits cleanly we want to come back up.
+# A 30-second pause discourages tight crash loops while still recovering
+# quickly from transient broker outages.
+Restart=on-failure
+RestartSec=30
+
+# Lockdown — broker traffic is the only outbound the runtime needs.
+# Leave commented if your environment uses a non-default claude install path
+# or other tools the spawned process needs to reach.
+# PrivateTmp=true
+# ProtectSystem=strict
+# ProtectHome=read-only
+# ReadWritePaths=%h/workspaces/%i
+
+[Install]
+WantedBy=default.target

@@ -111,14 +111,42 @@ class LocalState:
     def append_log(self, event: str, **fields: Any) -> None:
         record: dict[str, Any] = {"ts": now_iso(), "event": event}
         record.update(fields)
-        with self.log_path.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(record) + "\n")
+        _append_jsonl_secure(self.log_path, json.dumps(record))
 
     def append_dead_letter(self, msg_id: str, **fields: Any) -> None:
         record: dict[str, Any] = {"ts": now_iso(), "msg_id": msg_id}
         record.update(fields)
-        with self.dead_letter_path.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(record) + "\n")
+        _append_jsonl_secure(self.dead_letter_path, json.dumps(record))
+
+
+def _append_jsonl_secure(path: Path, line: str) -> None:
+    """Append a JSON line, creating the file at 0600 if it doesn't exist.
+
+    SPEC §22 / M2 disclosure follow-up: log.jsonl was previously created via
+    `open("a")` which inherits the user's default umask (often 022) and could
+    leave the file at 0644. Workdir state must remain user-readable only.
+    """
+    if not path.exists():
+        # First create at 0600 so the line we append never sits at 0644 even
+        # for an instant.
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+        try:
+            os.write(fd, (line + "\n").encode("utf-8"))
+        finally:
+            os.close(fd)
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
+        return
+    # Existing file: still tighten in case it was created before this fix.
+    try:
+        if path.stat().st_mode & 0o077:
+            os.chmod(path, 0o600)
+    except OSError:
+        pass
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(line + "\n")
 
 
 def _atomic_write_text(path: Path, content: str) -> None:

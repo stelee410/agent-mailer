@@ -27,9 +27,22 @@ import pytest
 from agent_mailer_cli.broker import InboxMessage
 from agent_mailer_cli.claude_runner import ClaudeResult
 from agent_mailer_cli.config import Config
+from agent_mailer_cli.recovery import DeadLetterStore, RetryStore
 from agent_mailer_cli.sessions import SessionStore
 from agent_mailer_cli.state import LocalState
 from agent_mailer_cli import watch as watch_mod
+
+
+def _stores(cfg_dir: Path):
+    return RetryStore(cfg_dir), DeadLetterStore(cfg_dir)
+
+
+async def _handle(msg, cfg, state, sessions, *, dry_run=False):
+    retries, dead = _stores(cfg.cfg_dir)
+    await watch_mod._handle_message(
+        msg, cfg, state, sessions, retries, dead,
+        dry_run=dry_run, max_retries=cfg.max_retries,
+    )
 
 
 def _make_cfg(workdir: Path) -> Config:
@@ -95,7 +108,7 @@ def test_success_records_session_and_processed(tmp_path: Path,
         ),
         captured,
     )
-    asyncio.run(watch_mod._handle_message(_msg(), cfg, state, sessions, dry_run=False))
+    asyncio.run(_handle(_msg(), cfg, state, sessions, dry_run=False))
 
     assert "msg-A" in state.processed
     assert state.cursor == "msg-A"
@@ -116,7 +129,7 @@ def test_nonzero_return_code_skips_processed_and_sessions(tmp_path: Path,
                      duration_seconds=0.1, parsed=None),
         _Captured(),
     )
-    asyncio.run(watch_mod._handle_message(_msg(), cfg, state, sessions, dry_run=False))
+    asyncio.run(_handle(_msg(), cfg, state, sessions, dry_run=False))
 
     assert "msg-A" not in state.processed
     assert state.cursor is None
@@ -140,7 +153,7 @@ def test_unparseable_json_marks_processed_but_not_session(tmp_path: Path,
                      parse_error="claude stdout was not valid JSON"),
         _Captured(),
     )
-    asyncio.run(watch_mod._handle_message(_msg(), cfg, state, sessions, dry_run=False))
+    asyncio.run(_handle(_msg(), cfg, state, sessions, dry_run=False))
 
     assert "msg-A" in state.processed
     assert sessions.get("thr-A") is None
@@ -157,7 +170,7 @@ def test_parsed_without_session_id_skips_session_write(tmp_path: Path,
                      duration_seconds=0.1, parsed={"foo": 1}),
         _Captured(),
     )
-    asyncio.run(watch_mod._handle_message(_msg(), cfg, state, sessions, dry_run=False))
+    asyncio.run(_handle(_msg(), cfg, state, sessions, dry_run=False))
 
     assert "msg-A" in state.processed
     assert sessions.get("thr-A") is None
@@ -180,7 +193,7 @@ def test_existing_fresh_session_triggers_resume(tmp_path: Path,
                      duration_seconds=0.1, parsed={"session_id": "S-prev"}),
         captured,
     )
-    asyncio.run(watch_mod._handle_message(_msg(), cfg, state, sessions, dry_run=False))
+    asyncio.run(_handle(_msg(), cfg, state, sessions, dry_run=False))
 
     assert len(captured.calls) == 1
     cmd, _ = captured.calls[0]
@@ -216,7 +229,7 @@ def test_stale_session_does_not_resume_and_appends_note(tmp_path: Path,
                      duration_seconds=0.1, parsed={"session_id": "S-NEW"}),
         captured,
     )
-    asyncio.run(watch_mod._handle_message(_msg(), cfg, state, sessions, dry_run=False))
+    asyncio.run(_handle(_msg(), cfg, state, sessions, dry_run=False))
 
     cmd, _ = captured.calls[0]
     assert "--resume" not in cmd
@@ -224,11 +237,13 @@ def test_stale_session_does_not_resume_and_appends_note(tmp_path: Path,
     assert "fresh thread" in prompt
     assert "Prior claude session for this thread expired" in prompt
     assert ".agent-mailer/memory/thr-A.md" in prompt
-    # New session id replaces the stale one; turn_count increments.
+    # SPEC §11.3 / reviewer P2-1: when the stale session is replaced with a
+    # NEW session_id, turn_count must RESET to 1 (not carry over the prior 7).
+    # The prior session is gone; the new session has had exactly one turn.
     rec = sessions.get("thr-A")
     assert rec is not None
     assert rec.session_id == "S-NEW"
-    assert rec.turn_count == 8  # 7 previous + 1 this turn
+    assert rec.turn_count == 1
 
 
 def test_no_prior_session_uses_fresh_template(tmp_path: Path,
@@ -243,7 +258,7 @@ def test_no_prior_session_uses_fresh_template(tmp_path: Path,
                      duration_seconds=0.1, parsed={"session_id": "S-FIRST"}),
         captured,
     )
-    asyncio.run(watch_mod._handle_message(_msg(), cfg, state, sessions, dry_run=False))
+    asyncio.run(_handle(_msg(), cfg, state, sessions, dry_run=False))
 
     cmd, _ = captured.calls[0]
     assert "--resume" not in cmd
@@ -269,7 +284,7 @@ def test_inflight_set_during_handle_and_cleared(tmp_path: Path,
                             duration_seconds=0.1, parsed={"session_id": "S"})
 
     monkeypatch.setattr("agent_mailer_cli.watch.run_claude", fake_run)
-    asyncio.run(watch_mod._handle_message(_msg(), cfg, state, sessions, dry_run=False))
+    asyncio.run(_handle(_msg(), cfg, state, sessions, dry_run=False))
 
     assert saw_inflight == [True]  # was inflight when claude was spawned
     assert (cfg.cfg_dir / "inflight.json").exists() is False  # cleared after
@@ -279,6 +294,6 @@ def test_dry_run_writes_processed_but_not_session(tmp_path: Path) -> None:
     cfg = _make_cfg(tmp_path)
     state = LocalState(cfg.cfg_dir)
     sessions = SessionStore(cfg.cfg_dir)
-    asyncio.run(watch_mod._handle_message(_msg(), cfg, state, sessions, dry_run=True))
+    asyncio.run(_handle(_msg(), cfg, state, sessions, dry_run=True))
     assert "msg-A" in state.processed
     assert sessions.get("thr-A") is None  # dry-run never updates sessions

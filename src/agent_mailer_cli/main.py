@@ -137,16 +137,21 @@ def verify(workdir: Optional[Path]) -> None:
     sys.exit(verify_cmd.run(workdir))
 
 
-@cli.command("status", help="(M6) Show current watcher status.")
-def status() -> None:
-    click.echo("status: not implemented yet (planned for M6).", err=True)
-    sys.exit(2)
+@cli.command("status", help="Show current watcher status (PID, inflight, dead-letter, last log event).")
+@click.option("--workdir", type=click.Path(file_okay=False, path_type=Path), default=None)
+def status(workdir: Optional[Path]) -> None:
+    from agent_mailer_cli.commands import status_cmd
+    sys.exit(status_cmd.run(workdir))
 
 
-@cli.command("logs", help="(M6) Tail the structured log.")
-def logs() -> None:
-    click.echo("logs: not implemented yet (planned for M6).", err=True)
-    sys.exit(2)
+@cli.command("logs", help="Tail the structured log.jsonl with optional --grep filter.")
+@click.option("--tail", "tail_n", type=int, default=20, help="Number of trailing lines (default 20).")
+@click.option("--grep", "pattern", default=None,
+              help="Substring filter (matches the JSON line text).")
+@click.option("--workdir", type=click.Path(file_okay=False, path_type=Path), default=None)
+def logs(tail_n: int, pattern: Optional[str], workdir: Optional[Path]) -> None:
+    from agent_mailer_cli.commands import logs_cmd
+    sys.exit(logs_cmd.run(workdir, tail_n=tail_n, pattern=pattern))
 
 
 @cli.group("sessions", help="Manage thread → claude session mappings.")
@@ -185,53 +190,59 @@ def sessions_prune(older_than: str, workdir: Optional[Path]) -> None:
     sys.exit(sessions_cmd.prune_sessions(workdir, older_than))
 
 
-@cli.group("memory", help="(M4) Manage agent memory files.")
+@cli.group("memory", help="Manage agent memory files (global + per-thread handoff notes).")
 def memory_group() -> None:
     pass
 
 
 @memory_group.command("show")
-@click.option("--thread", default=None)
-def memory_show(thread: Optional[str]) -> None:
-    click.echo("memory show: not implemented yet (planned for M4).", err=True)
-    sys.exit(2)
+@click.option("--thread", default=None, help="Show <thread_id>.md instead of global.md.")
+@click.option("--workdir", type=click.Path(file_okay=False, path_type=Path), default=None)
+def memory_show(thread: Optional[str], workdir: Optional[Path]) -> None:
+    from agent_mailer_cli.commands import memory_cmd
+    sys.exit(memory_cmd.show(workdir, thread))
 
 
 @memory_group.command("edit")
-@click.option("--thread", default=None)
-def memory_edit(thread: Optional[str]) -> None:
-    click.echo("memory edit: not implemented yet (planned for M4).", err=True)
-    sys.exit(2)
+@click.option("--thread", default=None, help="Edit <thread_id>.md instead of global.md.")
+@click.option("--workdir", type=click.Path(file_okay=False, path_type=Path), default=None)
+def memory_edit(thread: Optional[str], workdir: Optional[Path]) -> None:
+    from agent_mailer_cli.commands import memory_cmd
+    sys.exit(memory_cmd.edit(workdir, thread))
 
 
 @memory_group.command("ls")
-def memory_ls() -> None:
-    click.echo("memory ls: not implemented yet (planned for M4).", err=True)
-    sys.exit(2)
+@click.option("--workdir", type=click.Path(file_okay=False, path_type=Path), default=None)
+def memory_ls(workdir: Optional[Path]) -> None:
+    from agent_mailer_cli.commands import memory_cmd
+    sys.exit(memory_cmd.ls(workdir))
 
 
-@cli.group("dead-letter", help="(M5) Manage messages that exhausted retries.")
+@cli.group("dead-letter", help="Manage messages that exhausted retry budget.")
 def dead_letter_group() -> None:
     pass
 
 
 @dead_letter_group.command("list")
-def dead_letter_list() -> None:
-    click.echo("dead-letter list: not implemented yet (planned for M5).", err=True)
-    sys.exit(2)
+@click.option("--workdir", type=click.Path(file_okay=False, path_type=Path), default=None)
+def dead_letter_list(workdir: Optional[Path]) -> None:
+    from agent_mailer_cli.commands import dead_letter_cmd
+    sys.exit(dead_letter_cmd.list_dead_letter(workdir))
 
 
 @dead_letter_group.command("retry")
 @click.argument("msg_id")
-def dead_letter_retry(msg_id: str) -> None:
-    click.echo("dead-letter retry: not implemented yet (planned for M5).", err=True)
-    sys.exit(2)
+@click.option("--workdir", type=click.Path(file_okay=False, path_type=Path), default=None)
+def dead_letter_retry(msg_id: str, workdir: Optional[Path]) -> None:
+    from agent_mailer_cli.commands import dead_letter_cmd
+    sys.exit(dead_letter_cmd.retry_dead_letter(workdir, msg_id))
 
 
 @dead_letter_group.command("purge")
-def dead_letter_purge() -> None:
-    click.echo("dead-letter purge: not implemented yet (planned for M5).", err=True)
-    sys.exit(2)
+@click.option("--workdir", type=click.Path(file_okay=False, path_type=Path), default=None)
+def dead_letter_purge(workdir: Optional[Path]) -> None:
+    from agent_mailer_cli.commands import dead_letter_cmd
+    sys.exit(dead_letter_cmd.purge_dead_letter(workdir))
 
 
 @cli.command("fetch", help="Fetch a single message from the broker (debug).")

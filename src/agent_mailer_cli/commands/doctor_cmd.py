@@ -94,6 +94,24 @@ def run(workdir: Optional[Path]) -> int:
             consistency.detail.splitlines()[0] if consistency.ok else consistency.detail,
         ))
 
+    # 6. memory dir reachable + global.md present (M4).
+    from agent_mailer_cli.memory import global_md_path, memory_dir
+    md = memory_dir(workdir_path)
+    if md.exists():
+        md_mode = md.stat().st_mode & 0o777
+        checks.append(CheckResult(
+            "memory/ permissions <= 0700",
+            not (md_mode & 0o077),
+            oct(md_mode),
+        ))
+        gpath = global_md_path(workdir_path)
+        checks.append(CheckResult(
+            "memory/global.md present",
+            gpath.exists(),
+            str(gpath) if gpath.exists() else
+            "absent — will be auto-created on next `agent-mailer watch`",
+        ))
+
     # 6. .gitignore covers .agent-mailer/ (only if .git present)
     if (workdir_path / ".git").exists():
         from agent_mailer_cli.security import gitignore_covers

@@ -132,13 +132,20 @@ class SessionStore:
     def record_success(self, thread_id: str, session_id: str) -> SessionRecord:
         """Write/update mapping after a successful claude run.
 
-        Increments turn_count if the thread already existed, preserves
-        first_seen_at, and refreshes last_used_at. Persists atomically.
+        Three cases (M3 reviewer P2-1 fix):
+        - first sighting of the thread: turn_count=1, first_seen_at=now
+        - same session_id continues: turn_count += 1, first_seen_at preserved
+        - session_id CHANGED (stale → fresh, or invalidate→new): treat it as a
+          brand-new lineage; turn_count resets to 1, first_seen_at refreshes.
+          Carrying the prior turn_count would double-count and corrupt the
+          freshness check.
+
+        Persists atomically.
         """
         store = self._load()
         existing = store.get(thread_id)
         now = _now_iso()
-        if existing is None:
+        if existing is None or existing.session_id != session_id:
             rec = SessionRecord(
                 session_id=session_id,
                 last_used_at=now,
@@ -164,14 +171,28 @@ class SessionStore:
             return True
         return False
 
-    def prune(self, *, older_than_days: int) -> list[str]:
+    def prune(
+        self,
+        *,
+        older_than: Optional[timedelta] = None,
+        older_than_days: Optional[int] = None,
+    ) -> list[str]:
         """Remove records whose last_used_at is older than the cutoff.
+
+        Reviewer P3-1: prefer `older_than` (full-precision timedelta). The
+        `older_than_days` keyword is preserved for backwards compatibility
+        with internal callers; it gets converted at no precision loss because
+        days are an exact multiple of seconds.
 
         Returns the list of removed thread_ids.
         """
-        if older_than_days <= 0:
+        if older_than is None:
+            if older_than_days is None or older_than_days <= 0:
+                return []
+            older_than = timedelta(days=older_than_days)
+        if older_than.total_seconds() <= 0:
             return []
-        cutoff = _now() - timedelta(days=older_than_days)
+        cutoff = _now() - older_than
         store = self._load()
         removed: list[str] = []
         for tid, rec in list(store.items()):

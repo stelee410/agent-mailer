@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -11,6 +11,8 @@ import click
 from agent_mailer_cli.config import ConfigError, load_config
 from agent_mailer_cli.sessions import SessionStore, _parse_iso, is_session_fresh
 
+# Reviewer P3-1: keep full timedelta precision for hours/minutes — previous
+# version routed through integer days and lost ~24h of precision on "25h" etc.
 _DURATION_RE = re.compile(r"^\s*(\d+)\s*([dhm]?)\s*$")
 
 
@@ -105,36 +107,49 @@ def invalidate_session(workdir: Optional[Path], thread_id: str) -> int:
 
 
 def prune_sessions(workdir: Optional[Path], older_than: str) -> int:
-    days = _parse_duration_to_days(older_than)
-    if days is None:
+    delta = parse_duration(older_than)
+    if delta is None or delta.total_seconds() <= 0:
         click.echo(
-            f"❌ --older-than must look like '14d' / '30d' / '720h'; got {older_than!r}",
+            f"❌ --older-than must look like '14d' / '25h' / '90m'; got {older_than!r}",
             err=True,
         )
         return 2
     _, store, _ = _resolve_workdir_and_store(workdir)
-    removed = store.prune(older_than_days=days)
+    removed = store.prune(older_than=delta)
     if not removed:
-        click.echo(f"(no sessions older than {days} days)")
+        click.echo(f"(no sessions older than {_format_duration(delta)})")
         return 0
-    click.echo(f"✓ pruned {len(removed)} session(s):")
+    click.echo(f"✓ pruned {len(removed)} session(s) older than {_format_duration(delta)}:")
     for tid in removed:
         click.echo(f"  - {tid}")
     return 0
 
 
-def _parse_duration_to_days(spec: str) -> Optional[int]:
-    """Accept '14d' (days), '720h' (hours), or bare number = days."""
+def parse_duration(spec: str) -> Optional[timedelta]:
+    """Accept '14d' / '25h' / '90m' / bare number (days). Returns timedelta or None.
+
+    Reviewer P3-1: full precision — '25h' is 25 hours, not 1 day.
+    """
     m = _DURATION_RE.match(spec)
     if not m:
         return None
     value = int(m.group(1))
     unit = m.group(2) or "d"
     if unit == "d":
-        return value
+        return timedelta(days=value)
     if unit == "h":
-        return max(1, value // 24)
+        return timedelta(hours=value)
     if unit == "m":
-        # minutes — round up to 1 day for prune purposes.
-        return max(1, value // 1440)
+        return timedelta(minutes=value)
     return None
+
+
+def _format_duration(delta: timedelta) -> str:
+    seconds = int(delta.total_seconds())
+    if seconds % 86400 == 0:
+        return f"{seconds // 86400}d"
+    if seconds % 3600 == 0:
+        return f"{seconds // 3600}h"
+    if seconds % 60 == 0:
+        return f"{seconds // 60}m"
+    return f"{seconds}s"
