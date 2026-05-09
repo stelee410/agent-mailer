@@ -1,5 +1,11 @@
 """Prompt builders for the spawned Claude subprocess (§10.2).
 
+SPEC §22 mandates that the watcher pass ONLY message metadata that the
+broker can authenticate (msg_id, thread_id, from_agent — bound to an
+api_key) into the prompt; user-controllable fields (subject, body,
+attachments) must be fetched by claude itself via GET so they cross a
+clear data boundary instead of bleeding into the instruction stream.
+
 M2 only ships the "fresh thread" template. The "resume" branch is
 prepared but currently unused — `is_resume` is wired through so M3 can
 flip it on without touching this module's public surface.
@@ -14,7 +20,6 @@ You have a new task in a fresh thread.
 Message: {msg_id}
 Thread:  {thread_id}
 From:    {from_address}
-Subject: {subject}
 
 Steps:
 1. Read AGENT.md in the current directory for your identity.
@@ -49,11 +54,13 @@ Steps:
 
 
 def build_prompt(msg: InboxMessage, *, broker_url: str, is_resume: bool = False) -> str:
+    # SPEC §22: msg.subject and msg.raw must never reach this format dict —
+    # they are user-controlled fields that would create a prompt-injection
+    # vector. claude fetches them itself via GET /messages/{msg_id}.
     template = RESUME_TEMPLATE if is_resume else FRESH_TEMPLATE
     return template.format(
         msg_id=msg.id,
         thread_id=msg.thread_id,
         from_address=msg.from_agent,
-        subject=msg.subject,
         broker_url=broker_url.rstrip("/"),
     )
