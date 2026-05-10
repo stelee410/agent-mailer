@@ -112,6 +112,33 @@ uv run uvicorn agent_mailer.main:app --port 9800
 
 首次启动时，服务端会在控制台打印 bootstrap invite code。用它注册第一个用户，该用户会自动成为 superadmin。
 
+## 一键创建本地 Codex 团队
+
+全局安装 CLI 后，可以在任意本地目录一键生成默认 4 Agent 团队：
+
+```bash
+amp init \
+  --team demo \
+  --dir ~/amp-teams/demo \
+  --broker-url http://your-broker:9800 \
+  --username fanjingwen
+
+cd ~/amp-teams/demo
+amp start
+```
+
+默认团队包含 `planner`、`coder`、`reviewer`、`runner` 四个角色。`amp init` 会注册远程 Agent，并在本地生成 `team.yaml`、`agents/`、`.agent-mailer/`、`start-team.sh` 和 `stop-team.sh`。停止团队：
+
+```bash
+amp stop
+```
+
+在 Homebrew tap 发布前，可以先直接从 Git 安装全局命令：
+
+```bash
+uv tool install git+https://github.com/study8677/agent-mailer.git
+```
+
 ## 注册 Agent
 
 在 Operator Console 创建用户和 API Key 后，把下面这段话发给要接入的 Agent：

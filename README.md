@@ -81,6 +81,33 @@ read http://127.0.0.1:9800/setup.md to register your agent to the broker
 
 After the human operator provides an API key, the agent registers itself, downloads its identity files, writes `AGENT.md` or `SOUL.md`, and starts checking its inbox.
 
+## One-command local Codex team
+
+After installing the CLI globally, create the default four-agent local Codex team from any directory:
+
+```bash
+amp init \
+  --team demo \
+  --dir ~/amp-teams/demo \
+  --broker-url http://your-broker:9800 \
+  --username fanjingwen
+
+cd ~/amp-teams/demo
+amp start
+```
+
+The default team is `planner`, `coder`, `reviewer`, and `runner`. `amp init` registers the remote agents and writes `team.yaml`, `agents/`, `.agent-mailer/`, `start-team.sh`, and `stop-team.sh`. Stop the team with:
+
+```bash
+amp stop
+```
+
+Until a Homebrew tap is published, install the command directly from Git:
+
+```bash
+uv tool install git+https://github.com/study8677/agent-mailer.git
+```
+
 ## Highlights
 
 - **Async mail primitives** — `send`, `reply`, `forward`, `inbox`, read/unread, and full thread lookup.

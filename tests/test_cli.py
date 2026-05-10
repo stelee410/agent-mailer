@@ -9,6 +9,8 @@ os.environ.setdefault(
 import asyncio
 import json
 import shutil
+import sys
+import tomllib
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,14 +18,18 @@ from pathlib import Path
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+import agent_mailer.cli as cli_module
 from agent_mailer.auth import hash_password, verify_password
 from agent_mailer.bootstrap import ensure_bootstrap_invite_code
 from agent_mailer.cli import (
     _bootstrap_admin,
+    _cloud_init,
     _generate_invite_code,
     _login,
     _logout,
     _migrate_db,
+    _normalize_team_name,
+    _render_default_team_yaml,
     _up_team,
     _validate_team_spec,
     load_session,
@@ -374,6 +380,167 @@ def test_resolve_broker_url_priorities():
     # 3. Hardcoded fallback when neither
     from agent_mailer.cli import DEFAULT_BROKER_URL
     assert resolve_broker_url(Args(broker_url=None), {}) == DEFAULT_BROKER_URL
+
+
+# --- cloud shortcuts / default team ---
+
+
+def test_normalize_team_name():
+    assert _normalize_team_name("Demo Team!") == "demo-team"
+    assert _normalize_team_name("__") == "team"
+    assert _normalize_team_name("-bad") == "bad"
+
+
+def test_render_default_team_yaml_codex():
+    text = _render_default_team_yaml(
+        "demo", "http://broker.test", "codex"
+    )
+    assert "team: demo" in text
+    assert "broker_url: http://broker.test" in text
+    assert "runtime: codex" in text
+    for name in ("demo_planner", "demo_coder", "demo_reviewer", "demo_runner"):
+        assert f"name: {name}" in text
+    assert "forward 给 demo_coder" in text
+    assert "reply 给 demo_reviewer" in text
+
+
+def test_pyproject_exposes_amp_alias():
+    pyproject = tomllib.loads(Path("pyproject.toml").read_text())
+    scripts = pyproject["project"]["scripts"]
+    assert scripts["agent-mailer"] == "agent_mailer.cli:main"
+    assert scripts["amp"] == scripts["agent-mailer"]
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["amp", "init", "--team", "demo", "--broker-url", "http://broker.test"],
+        ["agent-mailer", "cloud", "init", "--team", "demo", "--broker-url", "http://broker.test"],
+    ],
+)
+def test_main_dispatches_cloud_init(monkeypatch, argv):
+    calls = []
+
+    async def fake_cloud_init(args):
+        calls.append(args)
+
+    monkeypatch.setattr(cli_module, "_cloud_init", fake_cloud_init)
+    monkeypatch.setattr(sys, "argv", argv)
+
+    cli_module.main()
+
+    assert len(calls) == 1
+    assert calls[0].team == "demo"
+    assert calls[0].broker_url == "http://broker.test"
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected_script"),
+    [
+        (["amp", "start"], "start-team.sh"),
+        (["amp", "stop"], "stop-team.sh"),
+        (["agent-mailer", "cloud", "start"], "start-team.sh"),
+        (["agent-mailer", "cloud", "stop"], "stop-team.sh"),
+    ],
+)
+def test_main_dispatches_cloud_start_stop(monkeypatch, argv, expected_script):
+    calls = []
+
+    def fake_run_script(args, script_name):
+        calls.append((args, script_name))
+
+    monkeypatch.setattr(cli_module, "_cloud_run_script", fake_run_script)
+    monkeypatch.setattr(sys, "argv", argv)
+
+    cli_module.main()
+
+    assert len(calls) == 1
+    assert calls[0][1] == expected_script
+
+
+def test_cloud_run_script_executes_from_team_dir(monkeypatch, tmp_path):
+    script = tmp_path / "start-team.sh"
+    script.write_text("#!/usr/bin/env bash\n")
+    calls = []
+
+    def fake_run(cmd, cwd, check):
+        calls.append((cmd, cwd, check))
+
+    monkeypatch.setattr(cli_module.subprocess, "run", fake_run)
+
+    cli_module._cloud_run_script(Args(dir=str(tmp_path)), "start-team.sh")
+
+    assert calls == [([str(script)], tmp_path.resolve(), True)]
+
+
+def test_cloud_run_script_missing_exits(tmp_path, capsys):
+    with pytest.raises(SystemExit) as exc_info:
+        cli_module._cloud_run_script(Args(dir=str(tmp_path)), "start-team.sh")
+    assert exc_info.value.code == 1
+    assert "amp init" in capsys.readouterr().err
+
+
+async def test_cloud_init_writes_default_codex_team(broker_with_user, tmp_path):
+    out = tmp_path / "cloud-team"
+    creds = tmp_path / "credentials.json"
+
+    await _cloud_init(
+        Args(
+            team="demo",
+            dir=str(out),
+            broker_url="http://broker.test",
+            username="alice",
+            password="secret-pw-123",
+            runtime="codex",
+            force=False,
+            credentials_path=str(creds),
+        ),
+        client=broker_with_user,
+    )
+
+    assert (out / "team.yaml").exists()
+    assert "name: demo_planner" in (out / "team.yaml").read_text()
+    for name in ("demo_planner", "demo_coder", "demo_reviewer", "demo_runner"):
+        ad = out / "agents" / name
+        assert (ad / "AGENT.md").exists()
+        assert (ad / ".env").exists()
+
+    assert (out / "start-team.sh").exists()
+    assert (out / "stop-team.sh").exists()
+    ticks = out / ".agent-mailer" / "codex-ticks.json"
+    assert ticks.exists()
+    cfg = json.loads(ticks.read_text())
+    assert {a["name"] for a in cfg["agents"]} == {
+        "demo_planner",
+        "demo_coder",
+        "demo_reviewer",
+        "demo_runner",
+    }
+
+
+async def test_cloud_init_uses_saved_default_broker(broker_with_user, tmp_path):
+    token = await _login_and_get_token(
+        broker_with_user, "http://broker.test", "alice", "secret-pw-123"
+    )
+    creds = tmp_path / "credentials.json"
+    _write_credentials(creds, "http://broker.test", token)
+    out = tmp_path / "saved-broker-team"
+
+    await _cloud_init(
+        Args(
+            team="saved",
+            dir=str(out),
+            broker_url=None,
+            username=None,
+            password=None,
+            runtime="codex",
+            force=False,
+            credentials_path=str(creds),
+        ),
+        client=broker_with_user,
+    )
+
+    assert "broker_url: http://broker.test" in (out / "team.yaml").read_text()
 
 
 # --- up-team ---

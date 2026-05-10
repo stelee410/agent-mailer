@@ -3,10 +3,12 @@ import asyncio
 import getpass
 import json
 import os
+import re
 import secrets
 import shlex
 import shutil
 import string
+import subprocess
 import sqlite3
 import sys
 import uuid
@@ -306,6 +308,90 @@ async def _logout(args):
 
 
 _VALID_RUNTIMES = ("claude", "codex")
+
+
+DEFAULT_TEAM_AGENTS = [
+    {
+        "suffix": "planner",
+        "role": "planner",
+        "description": "Requirement breakdown and architecture planning",
+        "prompt_template": (
+            "你是需求分析与架构设计专家。收到自然语言需求后，先拆解为清晰的技术规格，"
+            "包括模块划分、接口设计、验收标准和风险点。\n"
+            "需要别人继续处理时，主动通过 Mail Broker 发邮件协作。拆解完成后 forward 给 "
+            "{coder}，并 reply 通知发起人当前状态。"
+        ),
+    },
+    {
+        "suffix": "coder",
+        "role": "coder",
+        "description": "Code implementation",
+        "prompt_template": (
+            "你是软件开发者。收到技术规格后实现代码、补充必要测试，并在本地验证。\n"
+            "需要澄清时主动 reply 给发起人或 {planner}。完成实现后 reply 给 {reviewer} "
+            "申请审查；不要把未审查成品直接 forward 到下游。"
+        ),
+    },
+    {
+        "suffix": "reviewer",
+        "role": "reviewer",
+        "description": "Code review",
+        "prompt_template": (
+            "你是代码审查专家。审查正确性、安全性、可维护性、测试覆盖和回归风险。\n"
+            "发现问题时 reply 给 {coder}，附具体修改意见；通过后 reply 给 {planner}，"
+            "并 forward 给 {runner} 做执行验证。"
+        ),
+    },
+    {
+        "suffix": "runner",
+        "role": "runner",
+        "description": "Validation and deployment checks",
+        "prompt_template": (
+            "你是执行验证专家。负责运行测试、部署 staging、做 smoke check，并记录关键命令和结果。\n"
+            "验证完成后 reply 给 {planner} 汇报最终状态；如果失败，reply 给 {coder} 和 "
+            "{reviewer} 说明失败点。"
+        ),
+    },
+]
+
+
+_TEAM_NAME_RE = re.compile(r"[^a-z0-9_-]+")
+
+
+def _normalize_team_name(raw: str) -> str:
+    """Return a broker-safe team prefix derived from user input or cwd name."""
+    name = _TEAM_NAME_RE.sub("-", raw.lower()).strip("-_")
+    if not name:
+        name = "team"
+    if not re.match(r"^[a-z0-9]", name):
+        name = f"team-{name}"
+    return name[:31].rstrip("-_") or "team"
+
+
+def _render_default_team_yaml(team: str, broker_url: str, runtime: str) -> str:
+    """Render the built-in planner/coder/reviewer/runner team.yaml."""
+    if runtime not in _VALID_RUNTIMES:
+        raise ValueError(f"runtime must be one of {_VALID_RUNTIMES}")
+    names = {a["suffix"]: f"{team}_{a['suffix']}" for a in DEFAULT_TEAM_AGENTS}
+    lines = [
+        f"team: {team}",
+        f"broker_url: {broker_url}",
+        "defaults:",
+        f"  runtime: {runtime}",
+        "agents:",
+    ]
+    for agent in DEFAULT_TEAM_AGENTS:
+        full_name = names[agent["suffix"]]
+        prompt = agent["prompt_template"].format(**names)
+        lines.extend([
+            f"  - name: {full_name}",
+            f"    role: {agent['role']}",
+            f"    description: {agent['description']}",
+            "    system_prompt: |",
+        ])
+        lines.extend(f"      {line}" for line in prompt.splitlines())
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def _validate_team_spec(data: Any) -> dict:
@@ -701,8 +787,64 @@ async def _up_team(args, *, client: httpx.AsyncClient | None = None):
     print("Next: ./start-team.sh")
 
 
+# --- cloud shortcuts ---
+
+
+async def _cloud_init(args, *, client: httpx.AsyncClient | None = None):
+    """One-command local team scaffold for the common cloud-broker workflow."""
+    out_dir = Path(args.dir or Path.cwd()).expanduser().resolve()
+    creds_data = _load_credentials_file(_credentials_path(args))
+    broker_url = resolve_broker_url(args, creds_data)
+    team = _normalize_team_name(args.team or out_dir.name)
+    runtime = args.runtime or "codex"
+
+    if getattr(args, "username", None):
+        login_args = argparse.Namespace(
+            broker_url=broker_url,
+            username=args.username,
+            password=getattr(args, "password", None),
+            credentials_path=getattr(args, "credentials_path", None),
+        )
+        await _login(login_args, client=client)
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    yaml_path = out_dir / "team.yaml"
+    if yaml_path.exists() and not args.force:
+        print(
+            f"Error: {yaml_path} already exists. Use --force to overwrite it.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    yaml_path.write_text(
+        _render_default_team_yaml(team, broker_url, runtime),
+        encoding="utf-8",
+    )
+
+    up_args = argparse.Namespace(
+        yaml_path=str(yaml_path),
+        broker_url=broker_url,
+        output_dir=str(out_dir),
+        credentials_path=getattr(args, "credentials_path", None),
+    )
+    await _up_team(up_args, client=client)
+
+
+def _cloud_run_script(args, script_name: str):
+    out_dir = Path(args.dir or Path.cwd()).expanduser().resolve()
+    script = out_dir / script_name
+    if not script.exists():
+        print(
+            f"Error: {script} not found. Run `amp init` or `agent-mailer cloud init` in this directory first.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    subprocess.run([str(script)], cwd=out_dir, check=True)
+
+
 def main():
-    parser = argparse.ArgumentParser(prog="agent-mailer", description="Agent Mailer CLI")
+    prog = Path(sys.argv[0]).name or "agent-mailer"
+    parser = argparse.ArgumentParser(prog=prog, description="Agent Mailer CLI")
     parser.add_argument("--db", default=DB_PATH, help="Database file path")
     subparsers = parser.add_subparsers(dest="command")
 
@@ -742,6 +884,51 @@ def main():
     ut.add_argument("--output-dir", help=argparse.SUPPRESS)
     ut.add_argument("--credentials-path", help=argparse.SUPPRESS)
 
+    def add_cloud_init_args(p):
+        p.add_argument("--team", help="Team prefix (defaults to current directory name)")
+        p.add_argument("--dir", help="Team directory (default: current directory)")
+        p.add_argument("--broker-url", help=f"Broker URL (defaults to saved login, else {DEFAULT_BROKER_URL})")
+        p.add_argument("--username", help="Login username; prompts/uses AMP_PASSWORD for password")
+        p.add_argument("--password", help=argparse.SUPPRESS)
+        p.add_argument("--runtime", choices=_VALID_RUNTIMES, default="codex", help="Agent runtime (default: codex)")
+        p.add_argument("--force", action="store_true", help="Overwrite existing team.yaml")
+        p.add_argument("--credentials-path", help=argparse.SUPPRESS)
+
+    def add_cloud_run_args(p):
+        p.add_argument("--dir", help="Team directory (default: current directory)")
+
+    # Short aliases: `amp init`, `amp start`, `amp stop`
+    init = subparsers.add_parser(
+        "init",
+        help="Create the default planner/coder/reviewer/runner team in the current directory",
+    )
+    add_cloud_init_args(init)
+
+    start = subparsers.add_parser("start", help="Run ./start-team.sh from the team directory")
+    add_cloud_run_args(start)
+
+    stop = subparsers.add_parser("stop", help="Run ./stop-team.sh from the team directory")
+    add_cloud_run_args(stop)
+
+    # Namespaced cloud shortcuts: `agent-mailer cloud init/start/stop`
+    cloud = subparsers.add_parser(
+        "cloud",
+        help="One-command helpers for cloud-hosted Agent Mailer teams",
+    )
+    cloud_subparsers = cloud.add_subparsers(dest="cloud_command")
+
+    ci = cloud_subparsers.add_parser(
+        "init",
+        help="Create the default planner/coder/reviewer/runner team in the current directory",
+    )
+    add_cloud_init_args(ci)
+
+    cs = cloud_subparsers.add_parser("start", help="Run ./start-team.sh from the team directory")
+    add_cloud_run_args(cs)
+
+    cx = cloud_subparsers.add_parser("stop", help="Run ./stop-team.sh from the team directory")
+    add_cloud_run_args(cx)
+
     args = parser.parse_args()
     if not args.command:
         parser.print_help()
@@ -759,6 +946,22 @@ def main():
         asyncio.run(_logout(args))
     elif args.command == "up-team":
         asyncio.run(_up_team(args))
+    elif args.command == "init":
+        asyncio.run(_cloud_init(args))
+    elif args.command == "start":
+        _cloud_run_script(args, "start-team.sh")
+    elif args.command == "stop":
+        _cloud_run_script(args, "stop-team.sh")
+    elif args.command == "cloud":
+        if args.cloud_command == "init":
+            asyncio.run(_cloud_init(args))
+        elif args.cloud_command == "start":
+            _cloud_run_script(args, "start-team.sh")
+        elif args.cloud_command == "stop":
+            _cloud_run_script(args, "stop-team.sh")
+        else:
+            cloud.print_help()
+            sys.exit(1)
 
 
 if __name__ == "__main__":

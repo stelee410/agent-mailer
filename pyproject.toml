@@ -26,6 +26,7 @@ dev = [
 
 [project.scripts]
 agent-mailer = "agent_mailer.cli:main"
+amp = "agent_mailer.cli:main"
 agent-mailer-codex-tick = "agent_mailer.codex_tick:main"
 
 [build-system]
