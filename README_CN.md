@@ -224,6 +224,54 @@ amp stop project-a
 
 `agents/` 内含 API Key，所以 `amp` 会自动把本地团队产物加入 `.gitignore`。
 
+### 本地团队数据和运维
+
+真实邮件保存在 Broker 数据库里，不保存在本地智能体工作目录。当前生产/NY 服务器使用
+SQLite，路径是 `/root/agent-mailer-data/agent_mailer.db`，邮件表是
+`messages`。本地 agent 只保存运行状态和记忆，不保存邮件全文。
+
+每个本地智能体目录位于：
+
+```text
+~/amp-teams/<team>/agents/<agent>
+```
+
+常见文件和目录：
+
+- `AGENT.md`：运行时身份和操作说明。
+- `project`：指向真实项目目录的软链接。
+- `.agent-mailer/config.toml`：Broker URL、agent 地址和 API Key。
+- `log.jsonl`：本地 watcher/runtime 日志。
+- `processed.txt`：已处理消息 ID。
+- `cursor.txt`：inbox 轮询 cursor。
+- `inflight.json`：当前正在处理的消息/线程状态。
+- `sessions.json`：运行时 session 映射，如存在。
+- `dead_letter.jsonl` 和 `retries.json`：失败或待重试任务，如存在。
+- `memory/`：该智能体的持久记忆文件。
+
+记忆按作用域拆分。`memory/global.md` 是跨线程长期记忆；
+`memory/<thread_id>.md` 是单个邮件线程的 handoff notes。每次处理消息前，生成的
+prompt 会要求 agent 读取 global memory 和对应 thread memory；处理完成后，会要求
+agent 更新 thread memory。
+
+每个项目使用唯一 team name。例如 `opencmo` 项目使用 `opencmo-codex`，另一个项目使用
+`another-project-codex`。团队目录、tmux session、agent 名都会用 team name 区分。不要在
+不同项目复用同一个 team name，否则会刷新 Broker 上同一套 agent 和 API Key。
+
+Codex 和 Claude Code 团队名称刻意分离：`<name>-codex` 和
+`<name>-claude-code`。
+
+常用管理命令：
+
+```bash
+ls ~/amp-teams
+tmux ls | grep '^amp-'
+amp start <team>
+amp stop <team>
+amp stop
+tmux attach -t amp-<team>
+```
+
 ## 无人值守运行时：`agent-mailer` CLI
 
 除 Broker 外，本仓库还提供 **`agent-mailer`** 每 workdir 客户端运行时。它把

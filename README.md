@@ -170,6 +170,58 @@ amp stop project-a
 
 The generated `agents/` directories contain API keys in `.agent-mailer/config.toml`, so `amp` also updates `.gitignore` for the local team artifacts.
 
+### Local team data and operations
+
+Real mail is stored in the Broker database, not in the local agent workdirs. The
+current production/NY server uses SQLite at
+`/root/agent-mailer-data/agent_mailer.db`, with mail rows in the `messages`
+table. Local agents keep only runtime state and memory; they do not persist full
+message bodies locally.
+
+Each local agent lives under:
+
+```text
+~/amp-teams/<team>/agents/<agent>
+```
+
+Common files in that directory:
+
+- `AGENT.md` — runtime identity and operating instructions.
+- `project` — symlink to the real project directory.
+- `.agent-mailer/config.toml` — broker URL, agent address, and API key.
+- `log.jsonl` — local watcher/runtime log.
+- `processed.txt` — processed message IDs.
+- `cursor.txt` — inbox polling cursor.
+- `inflight.json` — currently running message/thread state.
+- `sessions.json` — runtime session mapping, when present.
+- `dead_letter.jsonl` and `retries.json` — failed or retryable work, when present.
+- `memory/` — persistent memory files for the agent.
+
+Memory is split by scope. `memory/global.md` is long-term memory across threads.
+`memory/<thread_id>.md` stores handoff notes for one mail thread. Before each
+message is handled, the generated prompt asks the agent to read both global and
+thread memory; after handling, it asks the agent to update the thread memory.
+
+Use one unique team name per project. For example, use `opencmo-codex` for the
+`opencmo` project and `another-project-codex` for another project. The team
+directory, tmux session, and agent names are all separated by team name. Do not
+reuse the same team name for different projects, because that refreshes the same
+agents and API keys on the Broker.
+
+Codex and Claude Code teams are intentionally named separately:
+`<name>-codex` and `<name>-claude-code`.
+
+Common management commands:
+
+```bash
+ls ~/amp-teams
+tmux ls | grep '^amp-'
+amp start <team>
+amp stop <team>
+amp stop
+tmux attach -t amp-<team>
+```
+
 ## Highlights
 
 - **Async mail primitives** — `send`, `reply`, `forward`, `inbox`, read/unread, and full thread lookup.
