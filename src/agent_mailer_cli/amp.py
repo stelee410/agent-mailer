@@ -5,6 +5,7 @@ import getpass
 import json
 import os
 import re
+import shlex
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -135,6 +136,9 @@ def _normalize_url(url: str) -> str:
 def _resolve_broker_url(broker_url: str | None, creds: dict[str, Any]) -> str:
     if broker_url:
         return _normalize_url(broker_url)
+    env_url = os.environ.get("AMP_BROKER_URL")
+    if env_url:
+        return _normalize_url(env_url)
     saved = creds.get("default_broker_url")
     if isinstance(saved, str) and saved:
         return _normalize_url(saved)
@@ -378,26 +382,42 @@ def create_default_team(
     return agents
 
 
-@click.group(help="amp — one-command local Agent Mailer team launcher.")
-def cli() -> None:
-    pass
+def _path_from_name(name: str) -> Path:
+    path = Path(name).expanduser()
+    if path.is_absolute() or path.parent != Path("."):
+        return path.resolve()
+    return (Path.cwd() / normalize_team_name(name)).resolve()
 
 
-@cli.command("init", help="Create the default planner/coder/reviewer/runner team here.")
-@click.option("--team", default=None, help="Team prefix (default: current directory name).")
-@click.option("--dir", "out_dir", type=click.Path(file_okay=False, path_type=Path), default=None,
-              help="Team directory (default: current directory).")
-@click.option("--broker-url", default=None, help="Broker URL (defaults to saved login, then localhost).")
-@click.option("--username", default=None, help="Login username when no saved session exists.")
-@click.option("--password", default=None, hide_input=True, help="Login password; prefer AMP_PASSWORD.")
-@click.option("--permission-mode", type=click.Choice(["acceptEdits", "bypassPermissions", "plan"]),
-              default=DEFAULT_PERMISSION_MODE, show_default=True)
-@click.option("--credentials-path", default=None, hidden=True)
-def init(team: str | None, out_dir: Path | None, broker_url: str | None,
-         username: str | None, password: str | None, permission_mode: str,
-         credentials_path: str | None) -> None:
-    target = (out_dir or Path.cwd()).resolve()
-    team_name = normalize_team_name(team or target.name)
+def _resolve_target_dir(name: str | None, out_dir: Path | None) -> Path:
+    if out_dir is not None:
+        return out_dir.expanduser().resolve()
+    if name:
+        return _path_from_name(name)
+    return Path.cwd().resolve()
+
+
+def _resolve_team_name(name: str | None, team: str | None, target: Path) -> str:
+    if team:
+        return normalize_team_name(team)
+    if name:
+        return normalize_team_name(Path(name).name)
+    return normalize_team_name(target.name)
+
+
+def _initialize_team(
+    *,
+    name: str | None,
+    team: str | None,
+    out_dir: Path | None,
+    broker_url: str | None,
+    username: str | None,
+    password: str | None,
+    permission_mode: str,
+    credentials_path: str | None,
+) -> tuple[Path, str, str, str, list[dict[str, str]]]:
+    target = _resolve_target_dir(name, out_dir)
+    team_name = _resolve_team_name(name, team, target)
     cred_path = _credentials_path(credentials_path)
     creds = _load_credentials(cred_path)
     resolved_broker = _resolve_broker_url(broker_url, creds)
@@ -417,26 +437,161 @@ def init(team: str | None, out_dir: Path | None, broker_url: str | None,
             permission_mode=permission_mode,
             client=client,
         )
+    return target, team_name, resolved_broker, user, agents
+
+
+def _command_target(name: str | None, out_dir: Path | None) -> str:
+    if out_dir is not None:
+        return f"--dir {shlex.quote(str(out_dir))}"
+    if name:
+        return shlex.quote(name)
+    return ""
+
+
+def _command_with_target(command: str, name: str | None, out_dir: Path | None) -> str:
+    target = _command_target(name, out_dir)
+    if target:
+        return f"amp {command} {target}"
+    return f"amp {command}"
+
+
+def _print_init_summary(
+    *,
+    target: Path,
+    team_name: str,
+    broker_url: str,
+    user: str,
+    agents: list[dict[str, str]],
+    start_command: str,
+    stop_command: str,
+) -> None:
     click.echo(f"OK Team '{team_name}' ready in {target}")
-    click.echo(f"OK Broker: {resolved_broker} ({user})")
+    click.echo(f"OK Broker: {broker_url} ({user})")
     for agent in agents:
         click.echo(f"  - {agent['name']} - {agent['address']}")
-    click.echo("\nStart: amp start")
-    click.echo("Stop:  amp stop")
+    click.echo(f"\nStart: {start_command}")
+    click.echo(f"Stop:  {stop_command}")
+
+
+@click.group(help="amp — one-command local Agent Mailer team launcher.")
+def cli() -> None:
+    pass
+
+
+@cli.command("login", help="Remember broker login for future amp commands.")
+@click.argument("broker", required=False)
+@click.argument("username_arg", required=False)
+@click.option("--broker-url", default=None, help="Broker URL.")
+@click.option("--username", default=None, help="Login username.")
+@click.option("--password", default=None, hide_input=True, help="Login password; prefer AMP_PASSWORD.")
+@click.option("--credentials-path", default=None, hidden=True)
+def login(
+    broker: str | None,
+    username_arg: str | None,
+    broker_url: str | None,
+    username: str | None,
+    password: str | None,
+    credentials_path: str | None,
+) -> None:
+    cred_path = _credentials_path(credentials_path)
+    creds = _load_credentials(cred_path)
+    resolved_broker = _resolve_broker_url(broker_url or broker, creds)
+    with httpx.Client(timeout=30.0) as client:
+        _, user = _login(
+            broker_url=resolved_broker,
+            username=username or username_arg or os.environ.get("AMP_USERNAME"),
+            password=password,
+            credentials_path=cred_path,
+            client=client,
+        )
+    click.echo(f"OK Logged in to {resolved_broker} as {user}")
+
+
+@cli.command("init", help="Create the default planner/coder/reviewer/runner team.")
+@click.argument("name", required=False)
+@click.option("--team", default=None, help="Team prefix (default: current directory name).")
+@click.option("--dir", "out_dir", type=click.Path(file_okay=False, path_type=Path), default=None,
+              help="Team directory (default: ./NAME, or current directory without NAME).")
+@click.option("--broker-url", default=None, help="Broker URL (defaults to saved login, then localhost).")
+@click.option("--username", default=None, help="Login username when no saved session exists.")
+@click.option("--password", default=None, hide_input=True, help="Login password; prefer AMP_PASSWORD.")
+@click.option("--permission-mode", type=click.Choice(["acceptEdits", "bypassPermissions", "plan"]),
+              default=DEFAULT_PERMISSION_MODE, show_default=True)
+@click.option("--credentials-path", default=None, hidden=True)
+def init(name: str | None, team: str | None, out_dir: Path | None, broker_url: str | None,
+         username: str | None, password: str | None, permission_mode: str,
+         credentials_path: str | None) -> None:
+    target, team_name, resolved_broker, user, agents = _initialize_team(
+        name=name,
+        team=team,
+        out_dir=out_dir,
+        broker_url=broker_url,
+        username=username,
+        password=password,
+        permission_mode=permission_mode,
+        credentials_path=credentials_path,
+    )
+    _print_init_summary(
+        target=target,
+        team_name=team_name,
+        broker_url=resolved_broker,
+        user=user,
+        agents=agents,
+        start_command=_command_with_target("start", name, out_dir),
+        stop_command=_command_with_target("stop", name, out_dir),
+    )
+
+
+@cli.command("up", help="Create or refresh a team, then start it.")
+@click.argument("name", required=False)
+@click.option("--team", default=None, help="Team prefix (default: NAME or directory name).")
+@click.option("--dir", "out_dir", type=click.Path(file_okay=False, path_type=Path), default=None,
+              help="Team directory (default: ./NAME, or current directory without NAME).")
+@click.option("--broker-url", default=None, help="Broker URL (defaults to saved login, then localhost).")
+@click.option("--username", default=None, help="Login username when no saved session exists.")
+@click.option("--password", default=None, hide_input=True, help="Login password; prefer AMP_PASSWORD.")
+@click.option("--permission-mode", type=click.Choice(["acceptEdits", "bypassPermissions", "plan"]),
+              default=DEFAULT_PERMISSION_MODE, show_default=True)
+@click.option("--credentials-path", default=None, hidden=True)
+def up(name: str | None, team: str | None, out_dir: Path | None, broker_url: str | None,
+       username: str | None, password: str | None, permission_mode: str,
+       credentials_path: str | None) -> None:
+    target, team_name, resolved_broker, user, agents = _initialize_team(
+        name=name,
+        team=team,
+        out_dir=out_dir,
+        broker_url=broker_url,
+        username=username,
+        password=password,
+        permission_mode=permission_mode,
+        credentials_path=credentials_path,
+    )
+    _print_init_summary(
+        target=target,
+        team_name=team_name,
+        broker_url=resolved_broker,
+        user=user,
+        agents=agents,
+        start_command=_command_with_target("start", name, out_dir),
+        stop_command=_command_with_target("stop", name, out_dir),
+    )
+    _run_script(target, "start-team.sh")
 
 
 @cli.command("start", help="Start this local team in tmux.")
+@click.argument("name", required=False)
 @click.option("--dir", "out_dir", type=click.Path(file_okay=False, path_type=Path), default=None,
-              help="Team directory (default: current directory).")
-def start(out_dir: Path | None) -> None:
-    _run_script(out_dir or Path.cwd(), "start-team.sh")
+              help="Team directory (default: ./NAME, or current directory without NAME).")
+def start(name: str | None, out_dir: Path | None) -> None:
+    _run_script(_resolve_target_dir(name, out_dir), "start-team.sh")
 
 
 @cli.command("stop", help="Stop this local team.")
+@click.argument("name", required=False)
 @click.option("--dir", "out_dir", type=click.Path(file_okay=False, path_type=Path), default=None,
-              help="Team directory (default: current directory).")
-def stop(out_dir: Path | None) -> None:
-    _run_script(out_dir or Path.cwd(), "stop-team.sh")
+              help="Team directory (default: ./NAME, or current directory without NAME).")
+def stop(name: str | None, out_dir: Path | None) -> None:
+    _run_script(_resolve_target_dir(name, out_dir), "stop-team.sh")
 
 
 def _run_script(out_dir: Path, name: str) -> None:

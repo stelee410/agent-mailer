@@ -89,29 +89,32 @@ Install the CLI globally once, then create the default four-agent team from any 
 uv tool install --force git+https://github.com/study8677/agent-mailer.git
 ```
 
-```bash
-mkdir -p ~/amp-teams/demo
-cd ~/amp-teams/demo
-amp init
-```
-
-On first run, `amp init` asks for the broker URL, username, and password. After that, it reuses the saved login. You can still pass everything explicitly:
+Log in once:
 
 ```bash
-amp init \
-  --team demo \
-  --dir ~/amp-teams/demo \
-  --broker-url http://your-broker:9800 \
-  --username fanjingwen
-
-cd ~/amp-teams/demo
-amp start
+amp login http://your-broker:9800 fanjingwen
 ```
+
+Then create and start a team with one short command:
+
+```bash
+cd ~/amp-teams
+amp up demo
+```
+
+If you want to create the files first and start later:
+
+```bash
+amp init demo
+amp start demo
+```
+
+`amp init demo` creates `./demo` automatically. On first run, `amp` asks for the broker URL, username, and password. After that, it reuses the saved login. You can still pass everything explicitly with `--broker-url`, `--username`, `--team`, and `--dir`.
 
 The default team is `planner`, `coder`, `reviewer`, and `runner`. `amp init` registers or refreshes those agents on the broker, writes `team.yaml`, `agents/`, `start-team.sh`, and `stop-team.sh`, and configures each agent workdir for `agent-mailer watch`. Stop the team with:
 
 ```bash
-amp stop
+amp stop demo
 ```
 
 The generated `agents/` directories contain API keys in `.agent-mailer/config.toml`, so `amp init` also updates `.gitignore` for the local team artifacts.

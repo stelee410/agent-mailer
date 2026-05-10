@@ -24,8 +24,10 @@ def test_amp_help_shows_short_commands() -> None:
     result = CliRunner().invoke(amp.cli, ["--help"])
     assert result.exit_code == 0
     assert "init" in result.output
+    assert "login" in result.output
     assert "start" in result.output
     assert "stop" in result.output
+    assert "up" in result.output
 
 
 def test_normalize_team_name() -> None:
@@ -42,6 +44,46 @@ def test_render_team_yaml_default_agents() -> None:
         assert f"name: {name}" in text
     assert "forward 给 demo_coder" in text
     assert "reply 给 demo_reviewer" in text
+
+
+def test_resolve_broker_url_prefers_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AMP_BROKER_URL", "http://env-broker.test/")
+    creds = {"default_broker_url": "http://saved-broker.test"}
+    assert amp._resolve_broker_url(None, creds) == "http://env-broker.test"
+
+
+def test_resolve_target_dir_from_name(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    assert amp._resolve_target_dir("Demo Team!", None) == tmp_path / "demo-team"
+    assert amp._resolve_team_name("Demo Team!", None, tmp_path / "demo-team") == "demo-team"
+
+
+def test_resolve_target_dir_from_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    target = tmp_path / "nested" / "ops"
+    assert amp._resolve_target_dir("nested/ops", None) == target
+    assert amp._resolve_team_name("nested/ops", None, target) == "ops"
+
+
+def test_command_hint_matches_named_team() -> None:
+    assert amp._command_with_target("start", "demo", None) == "amp start demo"
+    assert amp._command_with_target("stop", None, Path("/tmp/demo")) == "amp stop --dir /tmp/demo"
+    assert amp._command_with_target("start", None, None) == "amp start"
+
+
+def test_start_accepts_named_team_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[Path, str]] = []
+
+    def fake_run_script(out_dir: Path, name: str) -> None:
+        calls.append((out_dir, name))
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(amp, "_run_script", fake_run_script)
+
+    result = CliRunner().invoke(amp.cli, ["start", "Demo Team!"])
+
+    assert result.exit_code == 0
+    assert calls == [(tmp_path / "demo-team", "start-team.sh")]
 
 
 def test_create_default_team_writes_agent_workdirs(tmp_path: Path) -> None:
