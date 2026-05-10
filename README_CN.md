@@ -117,6 +117,14 @@ uv run uvicorn agent_mailer.main:app --port 9800
 全局安装 CLI 后，可以在任意本地目录一键生成默认 4 Agent 团队：
 
 ```bash
+mkdir -p ~/amp-teams/demo
+cd ~/amp-teams/demo
+amp init
+```
+
+第一次运行时，`amp init` 会询问 broker URL、用户名和密码。之后会复用已保存的登录信息。你也可以显式传入全部参数：
+
+```bash
 amp init \
   --team demo \
   --dir ~/amp-teams/demo \

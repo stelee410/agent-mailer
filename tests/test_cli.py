@@ -415,6 +415,7 @@ def test_pyproject_exposes_amp_alias():
     "argv",
     [
         ["amp", "init", "--team", "demo", "--broker-url", "http://broker.test"],
+        ["amp", "new", "--team", "demo", "--broker-url", "http://broker.test"],
         ["agent-mailer", "cloud", "init", "--team", "demo", "--broker-url", "http://broker.test"],
     ],
 )
@@ -432,6 +433,22 @@ def test_main_dispatches_cloud_init(monkeypatch, argv):
     assert len(calls) == 1
     assert calls[0].team == "demo"
     assert calls[0].broker_url == "http://broker.test"
+
+
+def test_main_dispatches_cloud_init_shortest_form(monkeypatch):
+    calls = []
+
+    async def fake_cloud_init(args):
+        calls.append(args)
+
+    monkeypatch.setattr(cli_module, "_cloud_init", fake_cloud_init)
+    monkeypatch.setattr(sys, "argv", ["amp", "init"])
+
+    cli_module.main()
+
+    assert len(calls) == 1
+    assert calls[0].team is None
+    assert calls[0].broker_url is None
 
 
 @pytest.mark.parametrize(
@@ -541,6 +558,25 @@ async def test_cloud_init_uses_saved_default_broker(broker_with_user, tmp_path):
     )
 
     assert "broker_url: http://broker.test" in (out / "team.yaml").read_text()
+
+
+async def test_cloud_init_requires_login_noninteractive(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli_module.sys.stdin, "isatty", lambda: False)
+    with pytest.raises(SystemExit) as exc_info:
+        await _cloud_init(
+            Args(
+                team="demo",
+                dir=str(tmp_path / "team"),
+                broker_url="http://broker.test",
+                username=None,
+                password=None,
+                runtime="codex",
+                force=False,
+                credentials_path=str(tmp_path / "missing.json"),
+            )
+        )
+    assert exc_info.value.code == 1
+    assert "amp login --broker-url http://broker.test" in capsys.readouterr().err
 
 
 # --- up-team ---

@@ -86,6 +86,14 @@ After the human operator provides an API key, the agent registers itself, downlo
 After installing the CLI globally, create the default four-agent local Codex team from any directory:
 
 ```bash
+mkdir -p ~/amp-teams/demo
+cd ~/amp-teams/demo
+amp init
+```
+
+On first run, `amp init` asks for the broker URL, username, and password. After that, it reuses the saved login. You can still pass everything explicitly:
+
+```bash
 amp init \
   --team demo \
   --dir ~/amp-teams/demo \

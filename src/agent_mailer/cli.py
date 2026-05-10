@@ -793,8 +793,19 @@ async def _up_team(args, *, client: httpx.AsyncClient | None = None):
 async def _cloud_init(args, *, client: httpx.AsyncClient | None = None):
     """One-command local team scaffold for the common cloud-broker workflow."""
     out_dir = Path(args.dir or Path.cwd()).expanduser().resolve()
-    creds_data = _load_credentials_file(_credentials_path(args))
-    broker_url = resolve_broker_url(args, creds_data)
+    creds_path = _credentials_path(args)
+    creds_data = _load_credentials_file(creds_path)
+    if getattr(args, "broker_url", None):
+        broker_url = _normalize_broker_url(args.broker_url)
+    elif creds_data.get("default_broker_url"):
+        broker_url = _normalize_broker_url(creds_data["default_broker_url"])
+    elif sys.stdin.isatty():
+        raw = input(f"Broker URL [{DEFAULT_BROKER_URL}]: ").strip()
+        broker_url = _normalize_broker_url(raw or DEFAULT_BROKER_URL)
+        args.broker_url = broker_url
+    else:
+        broker_url = DEFAULT_BROKER_URL
+
     team = _normalize_team_name(args.team or out_dir.name)
     runtime = args.runtime or "codex"
 
@@ -802,6 +813,24 @@ async def _cloud_init(args, *, client: httpx.AsyncClient | None = None):
         login_args = argparse.Namespace(
             broker_url=broker_url,
             username=args.username,
+            password=getattr(args, "password", None),
+            credentials_path=getattr(args, "credentials_path", None),
+        )
+        await _login(login_args, client=client)
+    elif not creds_data.get("credentials", {}).get(broker_url):
+        if not sys.stdin.isatty():
+            print(
+                f"Error: not logged in to {broker_url}. Run `amp login --broker-url {broker_url}` first.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        username = input(f"Username for {broker_url}: ").strip()
+        if not username:
+            print("Error: username is required.", file=sys.stderr)
+            sys.exit(1)
+        login_args = argparse.Namespace(
+            broker_url=broker_url,
+            username=username,
             password=getattr(args, "password", None),
             credentials_path=getattr(args, "credentials_path", None),
         )
@@ -904,6 +933,12 @@ def main():
     )
     add_cloud_init_args(init)
 
+    new = subparsers.add_parser(
+        "new",
+        help="Alias for init: create the default planner/coder/reviewer/runner team",
+    )
+    add_cloud_init_args(new)
+
     start = subparsers.add_parser("start", help="Run ./start-team.sh from the team directory")
     add_cloud_run_args(start)
 
@@ -946,7 +981,7 @@ def main():
         asyncio.run(_logout(args))
     elif args.command == "up-team":
         asyncio.run(_up_team(args))
-    elif args.command == "init":
+    elif args.command in ("init", "new"):
         asyncio.run(_cloud_init(args))
     elif args.command == "start":
         _cloud_run_script(args, "start-team.sh")
