@@ -53,13 +53,14 @@ def test_resolve_broker_url_prefers_env(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_resolve_target_dir_from_name(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("AMP_TEAMS_DIR", str(tmp_path))
     assert amp._resolve_target_dir("Demo Team!", None) == tmp_path / "demo-team"
     assert amp._resolve_team_name("Demo Team!", None, tmp_path / "demo-team") == "demo-team"
 
 
 def test_resolve_target_dir_from_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("AMP_TEAMS_DIR", str(tmp_path / "teams"))
     target = tmp_path / "nested" / "ops"
     assert amp._resolve_target_dir("nested/ops", None) == target
     assert amp._resolve_team_name("nested/ops", None, target) == "ops"
@@ -77,7 +78,7 @@ def test_start_accepts_named_team_dir(tmp_path: Path, monkeypatch: pytest.Monkey
     def fake_run_script(out_dir: Path, name: str) -> None:
         calls.append((out_dir, name))
 
-    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("AMP_TEAMS_DIR", str(tmp_path))
     monkeypatch.setattr(amp, "_run_script", fake_run_script)
 
     result = CliRunner().invoke(amp.cli, ["start", "Demo Team!"])

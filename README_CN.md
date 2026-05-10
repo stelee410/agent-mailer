@@ -154,7 +154,6 @@ amp login http://your-broker:9800 fanjingwen
 之后创建并启动团队只需要：
 
 ```bash
-cd ~/amp-teams
 amp up demo
 ```
 
@@ -171,9 +170,13 @@ amp init demo
 amp start demo
 ```
 
-`amp init demo` 会自动创建 `./demo` 目录。首次运行 `amp` 会询问 Broker URL、
+`amp init demo` 会自动创建目录。首次运行 `amp` 会询问 Broker URL、
 用户名和密码；登录态会保存在 `~/.agent-mailer/credentials.json`，后续复用。
 也可以继续用 `--broker-url`、`--username`、`--team`、`--dir` 显式传参。
+
+对于普通团队名，`amp` 会把团队放在 `~/amp-teams/<name>`，目录不存在就自动创建。
+如果想换默认根目录，可以设置 `AMP_TEAMS_DIR`；如果想指定精确路径，可以传
+`--dir`，或者使用 `./teams/demo` 这样的路径参数。
 
 默认团队包含 `planner`、`coder`、`reviewer`、`runner`。`amp init` 会在 Broker
 上注册或刷新这四个 Agent，并在当前目录写入 `team.yaml`、`agents/`、

@@ -98,7 +98,6 @@ amp login http://your-broker:9800 fanjingwen
 Then create and start a team with one short command:
 
 ```bash
-cd ~/amp-teams
 amp up demo
 ```
 
@@ -116,6 +115,8 @@ amp start demo
 ```
 
 `amp init demo` creates `./demo` automatically. On first run, `amp` asks for the broker URL, username, and password. After that, it reuses the saved login. You can still pass everything explicitly with `--broker-url`, `--username`, `--team`, and `--dir`.
+
+For simple names, `amp` stores teams under `~/amp-teams/<name>` and creates the directory automatically. To use another base directory, set `AMP_TEAMS_DIR`; to target an explicit path, pass `--dir` or a path such as `./teams/demo`.
 
 The default team is `planner`, `coder`, `reviewer`, and `runner`. `amp init` registers or refreshes those agents on the broker, writes `team.yaml`, `agents/`, `start-team.sh`, and `stop-team.sh`, and configures each agent workdir for `agent-mailer watch`. The default local runtime is Claude Code; `--runtime codex` stores Codex in each agent config. Stop the team with:
 

@@ -18,6 +18,7 @@ from agent_mailer_cli.config import Config, VALID_RUNTIMES, save_config
 DEFAULT_BROKER_URL = "http://localhost:9800"
 DEFAULT_CREDENTIALS_PATH = Path.home() / ".agent-mailer" / "credentials.json"
 DEFAULT_PERMISSION_MODE = "acceptEdits"
+DEFAULT_TEAMS_DIR = Path.home() / "amp-teams"
 
 DEFAULT_TEAM_AGENTS = [
     {
@@ -385,11 +386,20 @@ def create_default_team(
     return agents
 
 
+def _teams_dir() -> Path:
+    return Path(os.environ.get("AMP_TEAMS_DIR", str(DEFAULT_TEAMS_DIR))).expanduser().resolve()
+
+
+def _looks_like_path(name: str) -> bool:
+    path = Path(name).expanduser()
+    return path.is_absolute() or name.startswith(".") or "/" in name
+
+
 def _path_from_name(name: str) -> Path:
     path = Path(name).expanduser()
-    if path.is_absolute() or path.parent != Path("."):
+    if _looks_like_path(name):
         return path.resolve()
-    return (Path.cwd() / normalize_team_name(name)).resolve()
+    return (_teams_dir() / normalize_team_name(name)).resolve()
 
 
 def _resolve_target_dir(name: str | None, out_dir: Path | None) -> Path:
@@ -516,7 +526,7 @@ def login(
 @click.argument("name", required=False)
 @click.option("--team", default=None, help="Team prefix (default: current directory name).")
 @click.option("--dir", "out_dir", type=click.Path(file_okay=False, path_type=Path), default=None,
-              help="Team directory (default: ./NAME, or current directory without NAME).")
+              help="Team directory (default: ~/amp-teams/NAME, or current directory without NAME).")
 @click.option("--broker-url", default=None, help="Broker URL (defaults to saved login, then localhost).")
 @click.option("--username", default=None, help="Login username when no saved session exists.")
 @click.option("--password", default=None, hide_input=True, help="Login password; prefer AMP_PASSWORD.")
@@ -554,7 +564,7 @@ def init(name: str | None, team: str | None, out_dir: Path | None, broker_url: s
 @click.argument("name", required=False)
 @click.option("--team", default=None, help="Team prefix (default: NAME or directory name).")
 @click.option("--dir", "out_dir", type=click.Path(file_okay=False, path_type=Path), default=None,
-              help="Team directory (default: ./NAME, or current directory without NAME).")
+              help="Team directory (default: ~/amp-teams/NAME, or current directory without NAME).")
 @click.option("--broker-url", default=None, help="Broker URL (defaults to saved login, then localhost).")
 @click.option("--username", default=None, help="Login username when no saved session exists.")
 @click.option("--password", default=None, hide_input=True, help="Login password; prefer AMP_PASSWORD.")
@@ -592,7 +602,7 @@ def up(name: str | None, team: str | None, out_dir: Path | None, broker_url: str
 @cli.command("start", help="Start this local team in tmux.")
 @click.argument("name", required=False)
 @click.option("--dir", "out_dir", type=click.Path(file_okay=False, path_type=Path), default=None,
-              help="Team directory (default: ./NAME, or current directory without NAME).")
+              help="Team directory (default: ~/amp-teams/NAME, or current directory without NAME).")
 def start(name: str | None, out_dir: Path | None) -> None:
     _run_script(_resolve_target_dir(name, out_dir), "start-team.sh")
 
@@ -600,7 +610,7 @@ def start(name: str | None, out_dir: Path | None) -> None:
 @cli.command("stop", help="Stop this local team.")
 @click.argument("name", required=False)
 @click.option("--dir", "out_dir", type=click.Path(file_okay=False, path_type=Path), default=None,
-              help="Team directory (default: ./NAME, or current directory without NAME).")
+              help="Team directory (default: ~/amp-teams/NAME, or current directory without NAME).")
 def stop(name: str | None, out_dir: Path | None) -> None:
     _run_script(_resolve_target_dir(name, out_dir), "stop-team.sh")
 
