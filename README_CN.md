@@ -151,7 +151,7 @@ uv tool install --force git+https://github.com/study8677/agent-mailer.git
 先登录一次：
 
 ```bash
-amp login http://your-broker:9800 fanjingwen
+amp login http://your-broker:9800 user
 ```
 
 然后进入任意项目目录，启动 Codex 团队：
