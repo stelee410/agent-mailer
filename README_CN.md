@@ -139,7 +139,10 @@ Agent 会自动完成：
 
 ## 一条命令创建本地团队
 
-先全局安装一次 CLI，然后可以在任意目录里用 `amp` 创建默认四智能体团队：
+这是当前最短的本地团队流程：在任意项目目录里，用一个命令启动一组连接到
+Agent Mailer Broker 的四智能体团队。
+
+先全局安装一次 CLI：
 
 ```bash
 uv tool install --force git+https://github.com/study8677/agent-mailer.git
@@ -151,27 +154,37 @@ uv tool install --force git+https://github.com/study8677/agent-mailer.git
 amp login http://your-broker:9800 fanjingwen
 ```
 
-之后创建并启动团队只需要：
+然后进入任意项目目录，启动 Codex 团队：
 
 ```bash
+cd ~/work/your-project
 amp codex
 ```
 
-如果要用 Claude Code：
+或者启动 Claude Code 团队：
 
 ```bash
 amp claude-code
 ```
 
-不传团队名时，`amp` 会用当前目录名并自动加运行时后缀，例如
-`agent-mailer-codex` 或 `agent-mailer-claude-code`。普通团队名会放在
-`~/amp-teams/<team-name>`，目录不存在就自动创建。最近一次创建或启动的团队会被
-记录下来，所以停止或重新启动只需要：
+你不需要手动 `mkdir`、`git clone`，也不需要自己打开四个终端窗口。`amp codex`
+会一次性完成这些事：
+
+- 用当前目录名生成团队名，例如 `your-project-codex`；
+- 自动创建 `~/amp-teams/<team-name>`；
+- 在 Broker 上注册或刷新 `planner`、`coder`、`reviewer`、`runner`；
+- 写入 `team.yaml`、`agents/`、`start-team.sh`、`stop-team.sh`；
+- 启动一个 tmux session，里面跑四个 `agent-mailer watch` 进程。
+
+停止或重新启动最近一次团队：
 
 ```bash
 amp stop
 amp start
 ```
+
+不带名字的 `amp stop` 会先判断当前目录是不是生成出来的团队目录；如果不是，就停止
+最近一次由 `amp` 创建或启动的团队。
 
 如果想指定团队名，把名字放在运行时后面：
 
@@ -180,19 +193,21 @@ amp codex project-a
 amp claude-code project-a
 ```
 
+这会在 `~/amp-teams/` 下创建 `project-a-codex` 或
+`project-a-claude-code`。通常继续用 `amp stop` 就能停止最近团队；如果要明确指定：
+
+```bash
+amp stop project-a-codex
+```
+
 首次运行 `amp` 会询问 Broker URL、用户名和密码；登录态会保存在
 `~/.agent-mailer/credentials.json`，后续复用。也可以继续用 `--broker-url`、
 `--username`、`--dir` 显式传参。
 
-如果想换默认根目录，可以设置 `AMP_TEAMS_DIR`；如果想指定精确路径，可以传
-`--dir`，或者使用 `./teams/project-a` 这样的路径参数。
+运行前需要本机有 `tmux`，并且对应运行时 CLI 已经登录：`amp codex` 需要
+`codex`，`amp claude-code` 需要 `claude`。
 
-默认团队包含 `planner`、`coder`、`reviewer`、`runner`。`amp codex` 和
-`amp claude-code` 会在 Broker 上注册或刷新这四个 Agent，并写入 `team.yaml`、
-`agents/`、`start-team.sh`、`stop-team.sh`。每个 `agents/<name>/` 都已经配置好
-`agent-mailer watch` 所需的 `.agent-mailer/config.toml` 和 `AGENT.md`。
-
-旧的显式命令仍然可用：
+旧的显式命令仍然保留，适合脚本里使用：
 
 ```bash
 amp up project-a --runtime codex

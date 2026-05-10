@@ -83,7 +83,10 @@ After the human operator provides an API key, the agent registers itself, downlo
 
 ## One-command local agent team
 
-Install the CLI globally once, then create the default four-agent team from any directory:
+This is the shortest local workflow for running a four-agent team backed by a
+remote or local Agent Mailer broker.
+
+Install the CLI globally once:
 
 ```bash
 uv tool install --force git+https://github.com/study8677/agent-mailer.git
@@ -95,28 +98,38 @@ Log in once:
 amp login http://your-broker:9800 fanjingwen
 ```
 
-Then create and start a team with one short command:
+Then open any project directory and start the Codex team:
 
 ```bash
+cd ~/work/your-project
 amp codex
 ```
 
-Or use Claude Code:
+Or start the Claude Code team:
 
 ```bash
 amp claude-code
 ```
 
-With no name, `amp` uses the current directory name and appends the runtime, for
-example `agent-mailer-codex` or `agent-mailer-claude-code`. Simple team names
-are stored under `~/amp-teams/<team-name>` and the directory is created
-automatically. The most recently created or started team is remembered, so stop
-or restart it with:
+You do not need to create a team directory, clone another repo, or open four
+terminal windows manually. `amp codex` does the full bootstrap:
+
+- chooses a team name from the current folder, such as `your-project-codex`;
+- creates `~/amp-teams/<team-name>` automatically;
+- registers or refreshes `planner`, `coder`, `reviewer`, and `runner` on the broker;
+- writes `team.yaml`, `agents/`, `start-team.sh`, and `stop-team.sh`;
+- starts one tmux session with four `agent-mailer watch` processes.
+
+Stop or restart the most recent team:
 
 ```bash
 amp stop
 amp start
 ```
+
+`amp stop` with no name first checks whether the current directory is already a
+generated team directory. Otherwise it stops the most recently created or
+started `amp` team.
 
 If you want a named team, pass the name after the runtime:
 
@@ -125,19 +138,21 @@ amp codex project-a
 amp claude-code project-a
 ```
 
+Those create `project-a-codex` or `project-a-claude-code` under `~/amp-teams/`.
+You can still stop the latest team with `amp stop`; to target it explicitly:
+
+```bash
+amp stop project-a-codex
+```
+
 On first run, `amp` asks for the broker URL, username, and password. After that,
-it reuses the saved login. You can still pass everything explicitly with
-`--broker-url`, `--username`, and `--dir`.
+it reuses the saved login from `~/.agent-mailer/credentials.json`. You can still
+pass everything explicitly with `--broker-url`, `--username`, and `--dir`.
 
-To use another base directory, set `AMP_TEAMS_DIR`; to target an explicit path,
-pass `--dir` or a path such as `./teams/project-a`.
+Requirements: `tmux` plus a logged-in local runtime CLI, either `codex` for
+`amp codex` or `claude` for `amp claude-code`.
 
-The default team is `planner`, `coder`, `reviewer`, and `runner`. `amp codex`
-and `amp claude-code` register or refresh those agents on the broker, write
-`team.yaml`, `agents/`, `start-team.sh`, and `stop-team.sh`, and configure each
-agent workdir for `agent-mailer watch`.
-
-The older explicit commands are still available:
+The older explicit commands remain available for scripts:
 
 ```bash
 amp up project-a --runtime codex
