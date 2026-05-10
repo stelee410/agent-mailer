@@ -154,43 +154,54 @@ amp login http://your-broker:9800 fanjingwen
 之后创建并启动团队只需要：
 
 ```bash
-amp up demo
+amp codex
 ```
 
-如果要用 Codex 而不是 Claude Code：
+如果要用 Claude Code：
 
 ```bash
-amp up demo-codex --runtime codex
+amp claude-code
 ```
 
-如果想先生成文件、稍后再启动：
+不传团队名时，`amp` 会用当前目录名并自动加运行时后缀，例如
+`agent-mailer-codex` 或 `agent-mailer-claude-code`。普通团队名会放在
+`~/amp-teams/<team-name>`，目录不存在就自动创建。最近一次创建或启动的团队会被
+记录下来，所以停止或重新启动只需要：
 
 ```bash
-amp init demo
-amp start demo
+amp stop
+amp start
 ```
 
-`amp init demo` 会自动创建目录。首次运行 `amp` 会询问 Broker URL、
-用户名和密码；登录态会保存在 `~/.agent-mailer/credentials.json`，后续复用。
-也可以继续用 `--broker-url`、`--username`、`--team`、`--dir` 显式传参。
+如果想指定团队名，把名字放在运行时后面：
 
-对于普通团队名，`amp` 会把团队放在 `~/amp-teams/<name>`，目录不存在就自动创建。
+```bash
+amp codex project-a
+amp claude-code project-a
+```
+
+首次运行 `amp` 会询问 Broker URL、用户名和密码；登录态会保存在
+`~/.agent-mailer/credentials.json`，后续复用。也可以继续用 `--broker-url`、
+`--username`、`--dir` 显式传参。
+
 如果想换默认根目录，可以设置 `AMP_TEAMS_DIR`；如果想指定精确路径，可以传
-`--dir`，或者使用 `./teams/demo` 这样的路径参数。
+`--dir`，或者使用 `./teams/project-a` 这样的路径参数。
 
-默认团队包含 `planner`、`coder`、`reviewer`、`runner`。`amp init` 会在 Broker
-上注册或刷新这四个 Agent，并在当前目录写入 `team.yaml`、`agents/`、
-`start-team.sh`、`stop-team.sh`。每个 `agents/<name>/` 都已经配置好
-`agent-mailer watch` 所需的 `.agent-mailer/config.toml` 和 `AGENT.md`。默认本地
-运行时是 Claude Code；加 `--runtime codex` 后会把每个 Agent 配成 Codex。
+默认团队包含 `planner`、`coder`、`reviewer`、`runner`。`amp codex` 和
+`amp claude-code` 会在 Broker 上注册或刷新这四个 Agent，并写入 `team.yaml`、
+`agents/`、`start-team.sh`、`stop-team.sh`。每个 `agents/<name>/` 都已经配置好
+`agent-mailer watch` 所需的 `.agent-mailer/config.toml` 和 `AGENT.md`。
 
-停止团队：
+旧的显式命令仍然可用：
 
 ```bash
-amp stop demo
+amp up project-a --runtime codex
+amp init project-a
+amp start project-a
+amp stop project-a
 ```
 
-`agents/` 内含 API Key，所以 `amp init` 会自动把本地团队产物加入 `.gitignore`。
+`agents/` 内含 API Key，所以 `amp` 会自动把本地团队产物加入 `.gitignore`。
 
 ## 无人值守运行时：`agent-mailer` CLI
 

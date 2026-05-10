@@ -23,6 +23,8 @@ def test_pyproject_exposes_amp_script() -> None:
 def test_amp_help_shows_short_commands() -> None:
     result = CliRunner().invoke(amp.cli, ["--help"])
     assert result.exit_code == 0
+    assert "claude-code" in result.output
+    assert "codex" in result.output
     assert "init" in result.output
     assert "login" in result.output
     assert "start" in result.output
@@ -66,6 +68,26 @@ def test_resolve_target_dir_from_path(tmp_path: Path, monkeypatch: pytest.Monkey
     assert amp._resolve_team_name("nested/ops", None, target) == "ops"
 
 
+def test_runtime_shortcut_names_add_clear_suffixes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    project = tmp_path / "Agent Mailer"
+    project.mkdir()
+    monkeypatch.chdir(project)
+
+    assert amp._runtime_command_target(None, "codex") == ("agent-mailer-codex", "agent-mailer-codex")
+    assert amp._runtime_command_target("Agent-Mailer-CodeX", "codex") == (
+        "agent-mailer-codex",
+        "agent-mailer-codex",
+    )
+    assert amp._runtime_command_target("agent-mailer", "claude") == (
+        "agent-mailer-claude-code",
+        "agent-mailer-claude-code",
+    )
+    assert amp._runtime_command_target("./teams/agent-mailer", "codex") == (
+        "./teams/agent-mailer",
+        "agent-mailer-codex",
+    )
+
+
 def test_command_hint_matches_named_team() -> None:
     assert amp._command_with_target("start", "demo", None) == "amp start demo"
     assert amp._command_with_target("stop", None, Path("/tmp/demo")) == "amp stop --dir /tmp/demo"
@@ -85,6 +107,64 @@ def test_start_accepts_named_team_dir(tmp_path: Path, monkeypatch: pytest.Monkey
 
     assert result.exit_code == 0
     assert calls == [(tmp_path / "demo-team", "start-team.sh")]
+
+
+def test_stop_without_name_uses_last_team(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[Path, str]] = []
+
+    def fake_run_script(out_dir: Path, name: str) -> None:
+        calls.append((out_dir, name))
+
+    target = tmp_path / "agent-mailer-codex"
+    monkeypatch.setenv("AMP_STATE_PATH", str(tmp_path / "amp-state.json"))
+    amp._save_last_team(target, "agent-mailer-codex")
+    monkeypatch.setattr(amp, "_run_script", fake_run_script)
+
+    result = CliRunner().invoke(amp.cli, ["stop"])
+
+    assert result.exit_code == 0
+    assert calls == [(target.resolve(), "stop-team.sh")]
+
+
+def test_codex_shortcut_creates_suffixed_team(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    project = tmp_path / "Agent Mailer"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    captured: dict[str, object] = {}
+    calls: list[tuple[Path, str]] = []
+    remembered: list[tuple[Path, str]] = []
+    target = tmp_path / "teams" / "agent-mailer-codex"
+
+    def fake_initialize_team(**kwargs: object) -> tuple[Path, str, str, str, list[dict[str, str]]]:
+        captured.update(kwargs)
+        return (
+            target,
+            str(kwargs["team"]),
+            "http://broker.test",
+            "fanjingwen",
+            [{"name": "agent-mailer-codex_planner", "address": "planner@example.test"}],
+        )
+
+    def fake_save_last_team(out_dir: Path, team_name: str) -> None:
+        remembered.append((out_dir, team_name))
+
+    def fake_run_script(out_dir: Path, name: str) -> None:
+        calls.append((out_dir, name))
+
+    monkeypatch.setattr(amp, "_initialize_team", fake_initialize_team)
+    monkeypatch.setattr(amp, "_save_last_team", fake_save_last_team)
+    monkeypatch.setattr(amp, "_run_script", fake_run_script)
+
+    result = CliRunner().invoke(amp.cli, ["codex"])
+
+    assert result.exit_code == 0
+    assert captured["name"] == "agent-mailer-codex"
+    assert captured["team"] == "agent-mailer-codex"
+    assert captured["runtime"] == "codex"
+    assert remembered == [(target, "agent-mailer-codex")]
+    assert calls == [(target, "start-team.sh")]
+    assert "Start: amp start" in result.output
+    assert "Stop:  amp stop" in result.output
 
 
 def test_create_default_team_writes_agent_workdirs(tmp_path: Path) -> None:

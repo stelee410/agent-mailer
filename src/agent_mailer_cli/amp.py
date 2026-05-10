@@ -7,6 +7,7 @@ import os
 import re
 import shlex
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +19,9 @@ from agent_mailer_cli.config import Config, VALID_RUNTIMES, save_config
 DEFAULT_BROKER_URL = "http://localhost:9800"
 DEFAULT_CREDENTIALS_PATH = Path.home() / ".agent-mailer" / "credentials.json"
 DEFAULT_PERMISSION_MODE = "acceptEdits"
+DEFAULT_STATE_PATH = Path.home() / ".agent-mailer" / "amp-state.json"
 DEFAULT_TEAMS_DIR = Path.home() / "amp-teams"
+RUNTIME_TEAM_SUFFIXES = {"claude": "claude-code", "codex": "codex"}
 
 DEFAULT_TEAM_AGENTS = [
     {
@@ -110,6 +113,10 @@ def _credentials_path(path: str | None) -> Path:
     return Path(path).expanduser() if path else DEFAULT_CREDENTIALS_PATH
 
 
+def _state_path() -> Path:
+    return Path(os.environ.get("AMP_STATE_PATH", str(DEFAULT_STATE_PATH))).expanduser()
+
+
 def _load_credentials(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {"credentials": {}}
@@ -129,6 +136,43 @@ def _save_credentials(path: Path, data: dict[str, Any]) -> None:
     tmp.write_text(json.dumps(data, indent=2))
     os.chmod(tmp, 0o600)
     os.replace(tmp, path)
+
+
+def _save_last_team(target: Path, team_name: str) -> None:
+    path = _state_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "last_team": {
+            "name": team_name,
+            "dir": str(target.expanduser().resolve()),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+    }
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, indent=2))
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, path)
+
+
+def _load_last_team() -> tuple[Path, str] | None:
+    path = _state_path()
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    last = data.get("last_team")
+    if not isinstance(last, dict):
+        return None
+    raw_dir = last.get("dir")
+    raw_name = last.get("name")
+    if not isinstance(raw_dir, str) or not raw_dir:
+        return None
+    name = raw_name if isinstance(raw_name, str) and raw_name else Path(raw_dir).name
+    return Path(raw_dir).expanduser().resolve(), name
 
 
 def _normalize_url(url: str) -> str:
@@ -410,12 +454,59 @@ def _resolve_target_dir(name: str | None, out_dir: Path | None) -> Path:
     return Path.cwd().resolve()
 
 
+def _resolve_run_target_dir(name: str | None, out_dir: Path | None) -> Path:
+    if name or out_dir is not None:
+        return _resolve_target_dir(name, out_dir)
+    current = Path.cwd().resolve()
+    if (current / "start-team.sh").exists() or (current / "stop-team.sh").exists():
+        return current
+    last = _load_last_team()
+    if last is not None:
+        target, _ = last
+        return target
+    return _resolve_target_dir(None, None)
+
+
 def _resolve_team_name(name: str | None, team: str | None, target: Path) -> str:
     if team:
         return normalize_team_name(team)
     if name:
         return normalize_team_name(Path(name).name)
     return normalize_team_name(target.name)
+
+
+def _runtime_suffix(runtime: str) -> str:
+    return RUNTIME_TEAM_SUFFIXES[runtime]
+
+
+def _strip_runtime_suffix(name: str) -> str:
+    for suffix in RUNTIME_TEAM_SUFFIXES.values():
+        exact = suffix
+        marker = f"-{suffix}"
+        if name == exact:
+            return name
+        if name.endswith(marker):
+            return name[: -len(marker)].rstrip("-_") or "team"
+    return name
+
+
+def _runtime_team_name(raw: str, runtime: str) -> str:
+    suffix = _runtime_suffix(runtime)
+    name = normalize_team_name(raw)
+    if name == suffix or name.endswith(f"-{suffix}"):
+        return name
+    base = _strip_runtime_suffix(name)
+    max_base_len = 31 - len(suffix) - 1
+    base = base[:max_base_len].rstrip("-_") or "team"
+    return f"{base}-{suffix}"
+
+
+def _runtime_command_target(name: str | None, runtime: str) -> tuple[str, str]:
+    raw = Path(name).name if name else Path.cwd().name
+    team_name = _runtime_team_name(raw, runtime)
+    if name and _looks_like_path(name):
+        return name, team_name
+    return team_name, team_name
 
 
 def _initialize_team(
@@ -549,6 +640,7 @@ def init(name: str | None, team: str | None, out_dir: Path | None, broker_url: s
         runtime=runtime,
         credentials_path=credentials_path,
     )
+    _save_last_team(target, team_name)
     _print_init_summary(
         target=target,
         team_name=team_name,
@@ -587,6 +679,7 @@ def up(name: str | None, team: str | None, out_dir: Path | None, broker_url: str
         runtime=runtime,
         credentials_path=credentials_path,
     )
+    _save_last_team(target, team_name)
     _print_init_summary(
         target=target,
         team_name=team_name,
@@ -599,26 +692,114 @@ def up(name: str | None, team: str | None, out_dir: Path | None, broker_url: str
     _run_script(target, "start-team.sh")
 
 
+def _run_runtime_shortcut(
+    *,
+    name: str | None,
+    out_dir: Path | None,
+    broker_url: str | None,
+    username: str | None,
+    password: str | None,
+    permission_mode: str,
+    runtime: str,
+    credentials_path: str | None,
+) -> None:
+    target_arg, team_hint = _runtime_command_target(name, runtime)
+    target, team_name, resolved_broker, user, agents = _initialize_team(
+        name=target_arg,
+        team=team_hint,
+        out_dir=out_dir,
+        broker_url=broker_url,
+        username=username,
+        password=password,
+        permission_mode=permission_mode,
+        runtime=runtime,
+        credentials_path=credentials_path,
+    )
+    _save_last_team(target, team_name)
+    _print_init_summary(
+        target=target,
+        team_name=team_name,
+        broker_url=resolved_broker,
+        user=user,
+        agents=agents,
+        start_command="amp start",
+        stop_command="amp stop",
+    )
+    _run_script(target, "start-team.sh")
+
+
+@cli.command("codex", help="Create or refresh a Codex team, then start it.")
+@click.argument("name", required=False)
+@click.option("--dir", "out_dir", type=click.Path(file_okay=False, path_type=Path), default=None,
+              help="Team directory (default: ~/amp-teams/<name>-codex).")
+@click.option("--broker-url", default=None, help="Broker URL (defaults to saved login, then localhost).")
+@click.option("--username", default=None, help="Login username when no saved session exists.")
+@click.option("--password", default=None, hide_input=True, help="Login password; prefer AMP_PASSWORD.")
+@click.option("--permission-mode", type=click.Choice(["acceptEdits", "bypassPermissions", "plan"]),
+              default=DEFAULT_PERMISSION_MODE, show_default=True)
+@click.option("--credentials-path", default=None, hidden=True)
+def codex(name: str | None, out_dir: Path | None, broker_url: str | None,
+          username: str | None, password: str | None, permission_mode: str,
+          credentials_path: str | None) -> None:
+    _run_runtime_shortcut(
+        name=name,
+        out_dir=out_dir,
+        broker_url=broker_url,
+        username=username,
+        password=password,
+        permission_mode=permission_mode,
+        runtime="codex",
+        credentials_path=credentials_path,
+    )
+
+
+@cli.command("claude-code", help="Create or refresh a Claude Code team, then start it.")
+@click.argument("name", required=False)
+@click.option("--dir", "out_dir", type=click.Path(file_okay=False, path_type=Path), default=None,
+              help="Team directory (default: ~/amp-teams/<name>-claude-code).")
+@click.option("--broker-url", default=None, help="Broker URL (defaults to saved login, then localhost).")
+@click.option("--username", default=None, help="Login username when no saved session exists.")
+@click.option("--password", default=None, hide_input=True, help="Login password; prefer AMP_PASSWORD.")
+@click.option("--permission-mode", type=click.Choice(["acceptEdits", "bypassPermissions", "plan"]),
+              default=DEFAULT_PERMISSION_MODE, show_default=True)
+@click.option("--credentials-path", default=None, hidden=True)
+def claude_code(name: str | None, out_dir: Path | None, broker_url: str | None,
+                username: str | None, password: str | None, permission_mode: str,
+                credentials_path: str | None) -> None:
+    _run_runtime_shortcut(
+        name=name,
+        out_dir=out_dir,
+        broker_url=broker_url,
+        username=username,
+        password=password,
+        permission_mode=permission_mode,
+        runtime="claude",
+        credentials_path=credentials_path,
+    )
+
+
 @cli.command("start", help="Start this local team in tmux.")
 @click.argument("name", required=False)
 @click.option("--dir", "out_dir", type=click.Path(file_okay=False, path_type=Path), default=None,
-              help="Team directory (default: ~/amp-teams/NAME, or current directory without NAME).")
+              help="Team directory (default: last amp team, then current directory).")
 def start(name: str | None, out_dir: Path | None) -> None:
-    _run_script(_resolve_target_dir(name, out_dir), "start-team.sh")
+    _run_script(_resolve_run_target_dir(name, out_dir), "start-team.sh")
 
 
 @cli.command("stop", help="Stop this local team.")
 @click.argument("name", required=False)
 @click.option("--dir", "out_dir", type=click.Path(file_okay=False, path_type=Path), default=None,
-              help="Team directory (default: ~/amp-teams/NAME, or current directory without NAME).")
+              help="Team directory (default: last amp team, then current directory).")
 def stop(name: str | None, out_dir: Path | None) -> None:
-    _run_script(_resolve_target_dir(name, out_dir), "stop-team.sh")
+    _run_script(_resolve_run_target_dir(name, out_dir), "stop-team.sh")
 
 
 def _run_script(out_dir: Path, name: str) -> None:
     script = out_dir.resolve() / name
     if not script.exists():
-        raise click.ClickException(f"{script} not found. Run `amp init` first.")
+        raise click.ClickException(
+            f"{script} not found. Run `amp init`, `amp codex`, or `amp claude-code` first."
+        )
     subprocess.run([str(script)], cwd=out_dir.resolve(), check=True)
 
 

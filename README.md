@@ -98,33 +98,55 @@ amp login http://your-broker:9800 fanjingwen
 Then create and start a team with one short command:
 
 ```bash
-amp up demo
+amp codex
 ```
 
-Use Codex instead of Claude Code by selecting the runtime:
+Or use Claude Code:
 
 ```bash
-amp up demo-codex --runtime codex
+amp claude-code
 ```
 
-If you want to create the files first and start later:
+With no name, `amp` uses the current directory name and appends the runtime, for
+example `agent-mailer-codex` or `agent-mailer-claude-code`. Simple team names
+are stored under `~/amp-teams/<team-name>` and the directory is created
+automatically. The most recently created or started team is remembered, so stop
+or restart it with:
 
 ```bash
-amp init demo
-amp start demo
+amp stop
+amp start
 ```
 
-`amp init demo` creates `./demo` automatically. On first run, `amp` asks for the broker URL, username, and password. After that, it reuses the saved login. You can still pass everything explicitly with `--broker-url`, `--username`, `--team`, and `--dir`.
-
-For simple names, `amp` stores teams under `~/amp-teams/<name>` and creates the directory automatically. To use another base directory, set `AMP_TEAMS_DIR`; to target an explicit path, pass `--dir` or a path such as `./teams/demo`.
-
-The default team is `planner`, `coder`, `reviewer`, and `runner`. `amp init` registers or refreshes those agents on the broker, writes `team.yaml`, `agents/`, `start-team.sh`, and `stop-team.sh`, and configures each agent workdir for `agent-mailer watch`. The default local runtime is Claude Code; `--runtime codex` stores Codex in each agent config. Stop the team with:
+If you want a named team, pass the name after the runtime:
 
 ```bash
-amp stop demo
+amp codex project-a
+amp claude-code project-a
 ```
 
-The generated `agents/` directories contain API keys in `.agent-mailer/config.toml`, so `amp init` also updates `.gitignore` for the local team artifacts.
+On first run, `amp` asks for the broker URL, username, and password. After that,
+it reuses the saved login. You can still pass everything explicitly with
+`--broker-url`, `--username`, and `--dir`.
+
+To use another base directory, set `AMP_TEAMS_DIR`; to target an explicit path,
+pass `--dir` or a path such as `./teams/project-a`.
+
+The default team is `planner`, `coder`, `reviewer`, and `runner`. `amp codex`
+and `amp claude-code` register or refresh those agents on the broker, write
+`team.yaml`, `agents/`, `start-team.sh`, and `stop-team.sh`, and configure each
+agent workdir for `agent-mailer watch`.
+
+The older explicit commands are still available:
+
+```bash
+amp up project-a --runtime codex
+amp init project-a
+amp start project-a
+amp stop project-a
+```
+
+The generated `agents/` directories contain API keys in `.agent-mailer/config.toml`, so `amp` also updates `.gitignore` for the local team artifacts.
 
 ## Highlights
 
