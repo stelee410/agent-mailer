@@ -235,7 +235,7 @@ def test_stale_session_does_not_resume_and_appends_note(tmp_path: Path,
     assert "--resume" not in cmd
     prompt = cmd[2]
     assert "fresh thread" in prompt
-    assert "Prior claude session for this thread expired" in prompt
+    assert "Prior runtime session for this thread expired" in prompt
     assert ".agent-mailer/memory/thr-A.md" in prompt
     # SPEC §11.3 / reviewer P2-1: when the stale session is replaced with a
     # NEW session_id, turn_count must RESET to 1 (not carry over the prior 7).
@@ -264,7 +264,7 @@ def test_no_prior_session_uses_fresh_template(tmp_path: Path,
     assert "--resume" not in cmd
     prompt = cmd[2]
     assert "fresh thread" in prompt
-    assert "Prior claude session" not in prompt
+    assert "Prior runtime session" not in prompt
 
 
 # ---------------- inflight invariant ----------------
@@ -360,3 +360,34 @@ def test_spawn_progress_distinguishes_resume_from_fresh(
     out_fresh = capsys.readouterr().out
     assert "Spawning claude" in out_fresh
     assert "fresh" in out_fresh.lower()
+
+
+def test_codex_runtime_uses_codex_exec(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    cfg = _make_cfg(tmp_path)
+    cfg.runtime = "codex"
+    state = LocalState(cfg.cfg_dir)
+    sessions = SessionStore(cfg.cfg_dir)
+    captured = _Captured()
+
+    async def fake_run(cmd, *, cwd, timeout_seconds=1800):  # noqa: ANN001
+        captured.calls.append((list(cmd), Path(cwd)))
+        return ClaudeResult(
+            return_code=0,
+            stdout='{"type":"session_configured","session_id":"C-1"}\n',
+            stderr="",
+            duration_seconds=0.1,
+            parsed={"session_id": "C-1"},
+        )
+
+    monkeypatch.setattr("agent_mailer_cli.watch.run_codex", fake_run)
+    asyncio.run(_handle(_msg(), cfg, state, sessions, dry_run=False))
+
+    cmd, cwd = captured.calls[0]
+    assert cmd[:2] == ["codex", "--sandbox"]
+    assert "exec" in cmd
+    assert "--json" in cmd
+    assert cwd == tmp_path
+    assert sessions.get("thr-A").session_id == "C-1"  # type: ignore[union-attr]
+    assert "Spawning codex" in capsys.readouterr().out

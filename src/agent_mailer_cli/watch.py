@@ -22,10 +22,17 @@ from agent_mailer_cli.claude_runner import (
     ClaudeResult,
     ClaudeRunError,
     ClaudeTimeoutError,
-    build_cmd,
+    build_cmd as build_claude_cmd,
     run_claude,
 )
 from agent_mailer_cli.config import Config
+from agent_mailer_cli.codex_runner import (
+    CodexNotFoundError,
+    CodexRunError,
+    CodexTimeoutError,
+    build_cmd as build_codex_cmd,
+    run_codex,
+)
 from agent_mailer_cli.memory import ensure_global_md
 from agent_mailer_cli.prompt import build_prompt, build_stale_session_note
 from agent_mailer_cli.recovery import (
@@ -118,7 +125,7 @@ async def watch_loop(cfg: Config, *, dry_run: bool = False) -> int:
             f"{cfg.poll_interval_active}s active..."
         )
         if dry_run:
-            click.echo("ℹ️  Dry run: claude will NOT be spawned.")
+            click.echo(f"ℹ️  Dry run: {cfg.runtime} will NOT be spawned.")
 
         consecutive_errors = 0
         while True:
@@ -204,49 +211,45 @@ async def _handle_message(msg: InboxMessage, cfg: Config, state: LocalState,
         msg, broker_url=cfg.broker_url, is_resume=is_resume,
         stale_session_note=stale_note,
     )
-    cmd = build_cmd(
-        claude_command=cfg.claude_command,
-        prompt=prompt,
-        permission_mode=cfg.permission_mode or "acceptEdits",
-        session_id=resume_session_id,
-    )
+    cmd = _build_runtime_cmd(cfg, prompt, resume_session_id)
     state.append_log(
-        "claude_spawn", msg_id=msg.id, thread_id=msg.thread_id,
+        "runtime_spawn", msg_id=msg.id, thread_id=msg.thread_id,
+        runtime=cfg.runtime,
         is_resume=is_resume,
         resume_session_id=resume_session_id,
         stale_session=stale_note is not None,
     )
 
     if is_resume:
-        click.echo("  ⏳ Spawning claude (resume session, ~30s)...", nl=False)
+        click.echo(f"  ⏳ Spawning {cfg.runtime} (resume session, ~30s)...", nl=False)
     else:
-        click.echo("  ⏳ Spawning claude (fresh session, 1-3min)...", nl=False)
+        click.echo(f"  ⏳ Spawning {cfg.runtime} (fresh session, 1-3min)...", nl=False)
 
     try:
-        result: ClaudeResult = await run_claude(cmd, cwd=cfg.workdir or Path.cwd())
-    except ClaudeNotFoundError as exc:
+        result: ClaudeResult = await _run_runtime(cfg, cmd)
+    except (ClaudeNotFoundError, CodexNotFoundError) as exc:
         click.echo(f"\n❌ {exc}", err=True)
-        state.append_log("claude_not_found", msg_id=msg.id, error=str(exc))
+        state.append_log("runtime_not_found", msg_id=msg.id, runtime=cfg.runtime, error=str(exc))
         state.clear_inflight()
-        # Bail entirely — claude missing is a config issue, not a per-message one.
+        # Bail entirely — missing runtime CLI is a config issue, not a per-message one.
         raise WatchAborted(str(exc)) from exc
-    except ClaudeTimeoutError as exc:
-        click.echo(f"\n⚠️  claude timed out for {msg.id}: {exc}")
-        state.append_log("claude_timeout", msg_id=msg.id, error=str(exc))
+    except (ClaudeTimeoutError, CodexTimeoutError) as exc:
+        click.echo(f"\n⚠️  {cfg.runtime} timed out for {msg.id}: {exc}")
+        state.append_log("runtime_timeout", msg_id=msg.id, runtime=cfg.runtime, error=str(exc))
         _record_failure(msg, retries, dead_letter, state, max_retries,
                         last_error=f"timeout: {exc}")
         return
-    except ClaudeRunError as exc:
-        click.echo(f"\n⚠️  claude run error for {msg.id}: {exc}")
-        state.append_log("claude_run_error", msg_id=msg.id, error=str(exc))
+    except (ClaudeRunError, CodexRunError) as exc:
+        click.echo(f"\n⚠️  {cfg.runtime} run error for {msg.id}: {exc}")
+        state.append_log("runtime_run_error", msg_id=msg.id, runtime=cfg.runtime, error=str(exc))
         _record_failure(msg, retries, dead_letter, state, max_retries,
                         last_error=f"run error: {exc}")
         return
 
     if result.return_code != 0:
-        click.echo(f"\n⚠️  claude exited {result.return_code} for {msg.id} — "
+        click.echo(f"\n⚠️  {cfg.runtime} exited {result.return_code} for {msg.id} — "
                    f"will retry on next poll.")
-        state.append_log("claude_failed", msg_id=msg.id,
+        state.append_log("runtime_failed", msg_id=msg.id, runtime=cfg.runtime,
                          return_code=result.return_code,
                          duration_ms=int(result.duration_seconds * 1000),
                          stderr_tail=result.stderr[-400:])
@@ -260,7 +263,7 @@ async def _handle_message(msg: InboxMessage, cfg: Config, state: LocalState,
         session_id = result.parsed.get("session_id")
         cost = result.parsed.get("total_cost_usd")
     elif result.parse_error:
-        state.append_log("claude_output_unparsed", msg_id=msg.id,
+        state.append_log("runtime_output_unparsed", msg_id=msg.id, runtime=cfg.runtime,
                          parse_error=result.parse_error,
                          stdout_tail=result.stdout[-400:])
 
@@ -287,6 +290,29 @@ async def _handle_message(msg: InboxMessage, cfg: Config, state: LocalState,
 
     cost_str = f" (${cost:.2f})" if cost is not None else ""
     click.echo(f"\n✓ Processed {msg.id} in {result.duration_seconds:.1f}s{cost_str}")
+
+
+def _build_runtime_cmd(cfg: Config, prompt: str, session_id: Optional[str]) -> list[str]:
+    if cfg.runtime == "codex":
+        return build_codex_cmd(
+            codex_command=cfg.codex_command,
+            prompt=prompt,
+            permission_mode=cfg.permission_mode or "acceptEdits",
+            session_id=session_id,
+        )
+    return build_claude_cmd(
+        claude_command=cfg.claude_command,
+        prompt=prompt,
+        permission_mode=cfg.permission_mode or "acceptEdits",
+        session_id=session_id,
+    )
+
+
+async def _run_runtime(cfg: Config, cmd: list[str]) -> ClaudeResult:
+    cwd = cfg.workdir or Path.cwd()
+    if cfg.runtime == "codex":
+        return await run_codex(cmd, cwd=cwd)
+    return await run_claude(cmd, cwd=cwd)
 
 
 def _record_failure(

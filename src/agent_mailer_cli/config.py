@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Optional
 
 VALID_PERMISSION_MODES = ("acceptEdits", "bypassPermissions", "plan")
+VALID_RUNTIMES = ("claude", "codex")
 
 # Required for runtime; permission_mode is checked separately because the
 # decision tree in §8.1 routes "missing permission_mode" to a single-question
@@ -36,7 +37,9 @@ class Config:
     max_retries: int = 3
     session_max_age_days: int = 7
     session_max_turns: int = 50
+    runtime: str = "claude"
     claude_command: str = "claude"
+    codex_command: str = "codex"
 
     # Convenience: not persisted, set by callers.
     workdir: Optional[Path] = field(default=None, repr=False, compare=False)
@@ -84,7 +87,7 @@ def load_config(workdir: Path) -> Optional[Config]:
     }
     str_fields = {
         "agent_id", "agent_name", "address", "broker_url", "api_key",
-        "permission_mode", "claude_command",
+        "permission_mode", "runtime", "claude_command", "codex_command",
     }
     for key, value in data.items():
         if key in str_fields:
@@ -103,6 +106,10 @@ def load_config(workdir: Path) -> Optional[Config]:
         raise ConfigError(
             f"{path}: permission_mode must be one of {VALID_PERMISSION_MODES}, "
             f"got {cfg.permission_mode!r}"
+        )
+    if cfg.runtime not in VALID_RUNTIMES:
+        raise ConfigError(
+            f"{path}: runtime must be one of {VALID_RUNTIMES}, got {cfg.runtime!r}"
         )
     return cfg
 
@@ -160,6 +167,10 @@ def update_field(workdir: Path, key: str, value: str) -> Config:
         raise ConfigError(
             f"permission_mode must be one of {VALID_PERMISSION_MODES}, got {new_value!r}"
         )
+    if key == "runtime" and new_value not in VALID_RUNTIMES:
+        raise ConfigError(
+            f"runtime must be one of {VALID_RUNTIMES}, got {new_value!r}"
+        )
 
     setattr(cfg, key, new_value)
     save_config(cfg)
@@ -201,9 +212,12 @@ def _render_toml(cfg: Config) -> str:
         f"max_retries = {cfg.max_retries}",
         f"session_max_age_days = {cfg.session_max_age_days}",
         f"session_max_turns = {cfg.session_max_turns}",
+        f'runtime = "{_escape(cfg.runtime)}"',
     ]
     if cfg.claude_command and cfg.claude_command != "claude":
         lines.append(f'claude_command = "{_escape(cfg.claude_command)}"')
+    if cfg.codex_command and cfg.codex_command != "codex":
+        lines.append(f'codex_command = "{_escape(cfg.codex_command)}"')
     lines.append("")
     return "\n".join(lines)
 

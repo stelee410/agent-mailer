@@ -13,6 +13,7 @@ from typing import Optional
 import click
 
 from agent_mailer_cli import __version__
+from agent_mailer_cli.config import VALID_RUNTIMES
 from agent_mailer_cli.commands import (
     config_cmd,
     doctor_cmd,
@@ -33,7 +34,7 @@ def cli() -> None:
     pass
 
 
-@cli.command("watch", help="Poll the broker inbox and spawn headless claude per message.")
+@cli.command("watch", help="Poll the broker inbox and spawn the configured runtime per message.")
 @click.option("--workdir", type=click.Path(file_okay=False, path_type=Path), default=None,
               help="Workdir to operate on (default: current directory).")
 @click.option("--broker-url", default=None, help="Override broker_url from config.toml.")
@@ -42,18 +43,23 @@ def cli() -> None:
 @click.option("--address", default=None, help="Override address from config.toml.")
 @click.option("--permission-mode", type=click.Choice(["acceptEdits", "bypassPermissions", "plan"]),
               default=None, help="Override permission_mode from config.toml.")
+@click.option("--runtime", type=click.Choice(VALID_RUNTIMES), default=None,
+              help="Override runtime from config.toml.")
+@click.option("--claude-command", default=None, help="Override claude_command from config.toml.")
+@click.option("--codex-command", default=None, help="Override codex_command from config.toml.")
 @click.option("--poll-interval-idle", type=int, default=None, help="Override idle poll interval (s).")
 @click.option("--poll-interval-active", type=int, default=None, help="Override active poll interval (s).")
 @click.option("--max-retries", type=int, default=None, help="Override max_retries.")
 @click.option("--no-interactive", is_flag=True, default=False,
               help="Refuse to prompt; missing fields cause exit 2.")
 @click.option("--dry-run", is_flag=True, default=False,
-              help="Poll only; do not spawn claude. Useful for debugging connectivity.")
+              help="Poll only; do not spawn the local runtime. Useful for debugging connectivity.")
 @click.option("--ignore-agent-md-mismatch", is_flag=True, default=False,
               help="Skip the SPEC §15.6 #5 check that AGENT.md and config.toml "
                    "agree on agent_id. Use only for fixtures/tests.")
 def watch(workdir: Optional[Path], broker_url: Optional[str], api_key: Optional[str],
           agent_id: Optional[str], address: Optional[str], permission_mode: Optional[str],
+          runtime: Optional[str], claude_command: Optional[str], codex_command: Optional[str],
           poll_interval_idle: Optional[int], poll_interval_active: Optional[int],
           max_retries: Optional[int], no_interactive: bool, dry_run: bool,
           ignore_agent_md_mismatch: bool) -> None:
@@ -64,6 +70,9 @@ def watch(workdir: Optional[Path], broker_url: Optional[str], api_key: Optional[
         agent_id=agent_id,
         address=address,
         permission_mode=permission_mode,
+        runtime=runtime,
+        claude_command=claude_command,
+        codex_command=codex_command,
         poll_interval_idle=poll_interval_idle,
         poll_interval_active=poll_interval_active,
         max_retries=max_retries,
@@ -80,18 +89,26 @@ def watch(workdir: Optional[Path], broker_url: Optional[str], api_key: Optional[
 @click.option("--api-key", default=None)
 @click.option("--permission-mode", type=click.Choice(["acceptEdits", "bypassPermissions", "plan"]),
               default=None)
+@click.option("--runtime", type=click.Choice(VALID_RUNTIMES), default=None)
+@click.option("--claude-command", default=None)
+@click.option("--codex-command", default=None)
 @click.option("--broker-url", default=None)
 @click.option("--agent-id", default=None)
 @click.option("--address", default=None)
 @click.option("--agent-name", default=None)
 def init(workdir: Optional[Path], no_interactive: bool, api_key: Optional[str],
-         permission_mode: Optional[str], broker_url: Optional[str], agent_id: Optional[str],
+         permission_mode: Optional[str], runtime: Optional[str],
+         claude_command: Optional[str], codex_command: Optional[str],
+         broker_url: Optional[str], agent_id: Optional[str],
          address: Optional[str], agent_name: Optional[str]) -> None:
     code = init_cmd.run(
         workdir=workdir,
         no_interactive=no_interactive,
         api_key=api_key,
         permission_mode=permission_mode,
+        runtime=runtime,
+        claude_command=claude_command,
+        codex_command=codex_command,
         broker_url=broker_url,
         agent_id=agent_id,
         address=address,
@@ -154,7 +171,7 @@ def logs(tail_n: int, pattern: Optional[str], workdir: Optional[Path]) -> None:
     sys.exit(logs_cmd.run(workdir, tail_n=tail_n, pattern=pattern))
 
 
-@cli.group("sessions", help="Manage thread → claude session mappings.")
+@cli.group("sessions", help="Manage thread → runtime session mappings.")
 def sessions_group() -> None:
     pass
 

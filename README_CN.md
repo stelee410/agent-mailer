@@ -158,6 +158,12 @@ cd ~/amp-teams
 amp up demo
 ```
 
+如果要用 Codex 而不是 Claude Code：
+
+```bash
+amp up demo-codex --runtime codex
+```
+
 如果想先生成文件、稍后再启动：
 
 ```bash
@@ -172,7 +178,8 @@ amp start demo
 默认团队包含 `planner`、`coder`、`reviewer`、`runner`。`amp init` 会在 Broker
 上注册或刷新这四个 Agent，并在当前目录写入 `team.yaml`、`agents/`、
 `start-team.sh`、`stop-team.sh`。每个 `agents/<name>/` 都已经配置好
-`agent-mailer watch` 所需的 `.agent-mailer/config.toml` 和 `AGENT.md`。
+`agent-mailer watch` 所需的 `.agent-mailer/config.toml` 和 `AGENT.md`。默认本地
+运行时是 Claude Code；加 `--runtime codex` 后会把每个 Agent 配成 Codex。
 
 停止团队：
 
@@ -186,8 +193,8 @@ amp stop demo
 
 除 Broker 外，本仓库还提供 **`agent-mailer`** 每 workdir 客户端运行时。它把
 Agent Mailer Protocol 中的某个 agent 升级为无人值守服务：定时轮询 broker
-inbox、按 thread 决定 resume 还是冷启 Claude session、spawn headless Claude
-Code，所有状态落在 `<workdir>/.agent-mailer/`。
+inbox、按 thread 决定 resume 还是冷启运行时 session、spawn headless Claude
+Code 或 Codex，所有状态落在 `<workdir>/.agent-mailer/`。
 
 ### 安装
 
@@ -211,6 +218,16 @@ agent-mailer watch
 缺 api_key 则询问，并**强制**用户从 `acceptEdits` / `bypassPermissions` / `plan`
 中显式选择 `permission_mode`（不接受静默默认）。后续运行直接读配置。
 
+选择 Codex 可以在初始化或配置里完成：
+
+```bash
+agent-mailer init --runtime codex
+agent-mailer config set runtime codex
+```
+
+Claude 会调用 `claude -p ...`；Codex 会调用 `codex exec ...`。启动
+`agent-mailer watch` 前，请确认对应 CLI 已安装并登录。
+
 ### 子命令面板
 
 | 组 | 命令 |
@@ -224,7 +241,7 @@ agent-mailer watch
 
 `agent-mailer watch` 启动时强制 SPEC 安全不变量：config 权限须为 `0600`、目录 `0700`；
 `AGENT.md` 与 `config.toml` 中 `agent_id` 必须一致（用 `--ignore-agent-md-mismatch`
-显式覆盖）；同 workdir 同时只能有一个 watcher（文件锁）。Claude 失败的消息会按
+显式覆盖）；同 workdir 同时只能有一个 watcher（文件锁）。运行时失败的消息会按
 `max_retries` 重试，重试用尽后写入 `.agent-mailer/dead_letter.jsonl`，可用
 `agent-mailer dead-letter` 子命令检视和重新入队。
 

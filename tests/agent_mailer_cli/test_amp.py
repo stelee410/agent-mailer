@@ -131,6 +131,7 @@ def test_create_default_team_writes_agent_workdirs(tmp_path: Path) -> None:
             broker_url="http://broker.test",
             token="session-token",
             permission_mode="acceptEdits",
+            runtime="codex",
             client=client,
         )
 
@@ -154,6 +155,7 @@ def test_create_default_team_writes_agent_workdirs(tmp_path: Path) -> None:
         assert cfg.broker_url == "http://broker.test"
         assert cfg.api_key == f"amk-{agent['name']}"
         assert cfg.permission_mode == "acceptEdits"
+        assert cfg.runtime == "codex"
 
     assert ("POST", "/admin/teams") in requests
     assert requests.count(("POST", "/users/me/agents")) == 4

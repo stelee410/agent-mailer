@@ -23,6 +23,9 @@ ENV_MAP = {
     "AGENT_MAILER_ADDRESS": "address",
     "AGENT_MAILER_AGENT_NAME": "agent_name",
     "AGENT_MAILER_PERMISSION_MODE": "permission_mode",
+    "AGENT_MAILER_RUNTIME": "runtime",
+    "AGENT_MAILER_CLAUDE_COMMAND": "claude_command",
+    "AGENT_MAILER_CODEX_COMMAND": "codex_command",
 }
 
 
@@ -45,7 +48,10 @@ def discover(workdir: Path, **cli_overrides: object) -> DiscoveryResult:
 
     sources: dict[str, str] = {}
     if config_existed:
-        for name in ("agent_id", "agent_name", "address", "broker_url", "api_key", "permission_mode"):
+        for name in (
+            "agent_id", "agent_name", "address", "broker_url", "api_key",
+            "permission_mode", "runtime", "claude_command", "codex_command",
+        ):
             if getattr(cfg, name):
                 sources[name] = "config"
 

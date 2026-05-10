@@ -102,6 +102,12 @@ cd ~/amp-teams
 amp up demo
 ```
 
+Use Codex instead of Claude Code by selecting the runtime:
+
+```bash
+amp up demo-codex --runtime codex
+```
+
 If you want to create the files first and start later:
 
 ```bash
@@ -111,7 +117,7 @@ amp start demo
 
 `amp init demo` creates `./demo` automatically. On first run, `amp` asks for the broker URL, username, and password. After that, it reuses the saved login. You can still pass everything explicitly with `--broker-url`, `--username`, `--team`, and `--dir`.
 
-The default team is `planner`, `coder`, `reviewer`, and `runner`. `amp init` registers or refreshes those agents on the broker, writes `team.yaml`, `agents/`, `start-team.sh`, and `stop-team.sh`, and configures each agent workdir for `agent-mailer watch`. Stop the team with:
+The default team is `planner`, `coder`, `reviewer`, and `runner`. `amp init` registers or refreshes those agents on the broker, writes `team.yaml`, `agents/`, `start-team.sh`, and `stop-team.sh`, and configures each agent workdir for `agent-mailer watch`. The default local runtime is Claude Code; `--runtime codex` stores Codex in each agent config. Stop the team with:
 
 ```bash
 amp stop demo
@@ -167,9 +173,9 @@ Each agent receives a generated identity file such as `AGENT.md` or `SOUL.md`. A
 
 In addition to the broker, this repo ships **`agent-mailer`**, a per-workdir
 client runtime that turns an Agent Mailer Protocol agent into an unattended
-service. Instead of a human running `claude` and typing `/check-inbox`, the
-CLI polls the broker, decides whether to resume an existing claude session
-or start a fresh one, spawns headless Claude Code, and persists state under
+service. Instead of a human running an agent CLI and typing `/check-inbox`, the
+CLI polls the broker, decides whether to resume an existing runtime session
+or start a fresh one, spawns headless Claude Code or Codex, and persists state under
 `<workdir>/.agent-mailer/`.
 
 ### Install
@@ -197,6 +203,16 @@ missing, and forces an explicit choice of `permission_mode`
 (`acceptEdits` / `bypassPermissions` / `plan`). Subsequent runs read the
 config directly without prompting.
 
+Select Codex either during setup or in config:
+
+```bash
+agent-mailer init --runtime codex
+agent-mailer config set runtime codex
+```
+
+Claude uses `claude -p ...`; Codex uses `codex exec ...`. Make sure the
+matching CLI is installed and logged in before starting `agent-mailer watch`.
+
 ### Subcommand surface
 
 | Group | Commands |
@@ -211,7 +227,7 @@ config directly without prompting.
 `agent-mailer watch` enforces the SPEC's safety invariants: config files
 must be `0600` (directory `0700`), the agent_id in `AGENT.md` must match
 the one in `config.toml` (override with `--ignore-agent-md-mismatch`),
-and exactly one watcher process per workdir (file lock). When a claude
+and exactly one watcher process per workdir (file lock). When a runtime
 turn fails, the message goes through up to `max_retries` retries before
 landing in `.agent-mailer/dead_letter.jsonl`, which you can inspect or
 re-queue with `agent-mailer dead-letter`.

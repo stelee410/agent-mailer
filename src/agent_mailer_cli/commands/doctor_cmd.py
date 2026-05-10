@@ -26,12 +26,23 @@ def run(workdir: Optional[Path]) -> int:
     workdir_path = (workdir or Path.cwd()).resolve()
     checks: list[CheckResult] = []
 
-    # 1. claude on PATH
-    claude_path = shutil.which("claude")
+    # 1. runtime CLI on PATH. If config is absent we default to the historical
+    # Claude check; once config exists we check the configured runtime.
+    configured = None
+    if config_file_path(workdir_path).exists():
+        try:
+            configured = load_config(workdir_path)
+        except Exception:
+            configured = None
+    runtime = configured.runtime if configured else "claude"
+    command = configured.codex_command if configured and runtime == "codex" else (
+        configured.claude_command if configured else "claude"
+    )
+    path = shutil.which(command)
     checks.append(CheckResult(
-        "claude CLI on PATH",
-        claude_path is not None,
-        claude_path or "not found — install via `npm install -g @anthropic-ai/claude-code`",
+        f"{runtime} CLI on PATH",
+        path is not None,
+        path or f"not found — install {runtime} or set {runtime}_command in config.toml",
     ))
 
     # 2. config.toml exists
@@ -62,7 +73,7 @@ def run(workdir: Optional[Path]) -> int:
     cfg = None
     if cfg_path.exists():
         try:
-            cfg = load_config(workdir_path)
+            cfg = configured if configured else load_config(workdir_path)
         except Exception as exc:
             checks.append(CheckResult("config.toml parses", False, str(exc)))
         else:

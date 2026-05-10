@@ -3,8 +3,8 @@
 SPEC §22 mandates that the watcher pass ONLY message metadata that the
 broker can authenticate (msg_id, thread_id, from_agent — bound to an
 api_key) into the prompt; user-controllable fields (subject, body,
-attachments) must be fetched by claude itself via GET so they cross a
-clear data boundary instead of bleeding into the instruction stream.
+attachments) must be fetched by the spawned runtime via GET so they cross
+a clear data boundary instead of bleeding into the instruction stream.
 
 M3 enables session resume. `build_prompt` now accepts a
 `stale_session_note` to support the §11.3 fallback when a thread's
@@ -64,7 +64,7 @@ def build_prompt(
 ) -> str:
     # SPEC §22: msg.subject and msg.raw must never reach this format dict —
     # they are user-controlled fields that would create a prompt-injection
-    # vector. claude fetches them itself via GET /messages/{msg_id}.
+    # vector. The spawned runtime fetches them via GET /messages/{msg_id}.
     template = RESUME_TEMPLATE if is_resume else FRESH_TEMPLATE
     body = template.format(
         msg_id=msg.id,
@@ -85,7 +85,7 @@ def build_stale_session_note(*, age_days: int, turn_count: int, memory_dir: str,
     `.agent-mailer/memory`). thread_id selects the per-thread handoff file.
     """
     return (
-        f"Prior claude session for this thread expired "
+        f"Prior runtime session for this thread expired "
         f"(age={age_days}d, turns={turn_count}). "
         f"Read {memory_dir}/{thread_id}.md for handoff notes from prior "
         f"sessions before starting fresh."
