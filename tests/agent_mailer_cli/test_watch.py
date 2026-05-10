@@ -249,6 +249,7 @@ def test_stale_session_does_not_resume_and_appends_note(tmp_path: Path,
 def test_no_prior_session_uses_fresh_template(tmp_path: Path,
                                                monkeypatch: pytest.MonkeyPatch) -> None:
     cfg = _make_cfg(tmp_path)
+    cfg.project_dir = str(tmp_path / "project")
     state = LocalState(cfg.cfg_dir)
     sessions = SessionStore(cfg.cfg_dir)
     captured = _Captured()
@@ -264,6 +265,7 @@ def test_no_prior_session_uses_fresh_template(tmp_path: Path,
     assert "--resume" not in cmd
     prompt = cmd[2]
     assert "fresh thread" in prompt
+    assert f"Project: {cfg.project_dir}" in prompt
     assert "Prior runtime session" not in prompt
 
 
@@ -367,6 +369,7 @@ def test_codex_runtime_uses_codex_exec(
 ) -> None:
     cfg = _make_cfg(tmp_path)
     cfg.runtime = "codex"
+    cfg.project_dir = str(tmp_path / "project")
     state = LocalState(cfg.cfg_dir)
     sessions = SessionStore(cfg.cfg_dir)
     captured = _Captured()
@@ -386,6 +389,8 @@ def test_codex_runtime_uses_codex_exec(
 
     cmd, cwd = captured.calls[0]
     assert cmd[:2] == ["codex", "--sandbox"]
+    assert "--add-dir" in cmd
+    assert str(tmp_path / "project") in cmd
     assert "exec" in cmd
     assert "--json" in cmd
     assert cwd == tmp_path

@@ -54,6 +54,26 @@ def test_build_cmd_bypass() -> None:
     assert "--sandbox" not in cmd
 
 
+def test_build_cmd_includes_project_dir_as_additional_workspace() -> None:
+    cmd = build_cmd(
+        codex_command="codex",
+        prompt="do work",
+        permission_mode="acceptEdits",
+        project_dir="/work/project",
+    )
+
+    assert cmd[:7] == [
+        "codex",
+        "--sandbox",
+        "workspace-write",
+        "--ask-for-approval",
+        "never",
+        "--add-dir",
+        "/work/project",
+    ]
+    assert "exec" in cmd
+
+
 def test_parse_codex_output_finds_nested_session_id() -> None:
     parsed, err = parse_codex_output(
         '{"type":"event","payload":{"session_id":"abc-123"}}\n'

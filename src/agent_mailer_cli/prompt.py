@@ -22,13 +22,14 @@ You have a new task in a fresh thread.
 Message: {msg_id}
 Thread:  {thread_id}
 From:    {from_address}
+Project: {project_dir}
 
 Steps:
 1. Read AGENT.md in the current directory for your identity.
 2. Read your global memory: .agent-mailer/memory/global.md (if it exists).
 3. GET {broker_url}/messages/{msg_id} (header X-API-Key from .agent-mailer/config.toml) to fetch the full message body.
 4. GET {broker_url}/messages/thread/{thread_id} for any prior context.
-5. Execute according to your system_prompt in AGENT.md.
+5. Execute according to your system_prompt in AGENT.md, doing project work in the Project directory above. If Project is unset, use the current directory.
 6. POST {broker_url}/messages/send to reply or forward as appropriate.
 7. Before exiting, Edit .agent-mailer/memory/{thread_id}.md with:
    - Your key non-obvious judgments
@@ -42,13 +43,14 @@ A new message arrived in our active thread.
 
 Message: {msg_id}
 Thread:  {thread_id}
+Project: {project_dir}
 
 You already have full context from prior turns in this conversation.
 
 Steps:
 1. Read your handoff notes: .agent-mailer/memory/{thread_id}.md
 2. GET {broker_url}/messages/{msg_id}
-3. Continue work per our prior reasoning.
+3. Continue work per our prior reasoning in the Project directory above. If Project is unset, use the current directory.
 4. POST {broker_url}/messages/send to reply or forward.
 5. Update .agent-mailer/memory/{thread_id}.md if you reached new insights.
 6. PATCH {broker_url}/messages/{msg_id}/read.
@@ -59,6 +61,7 @@ def build_prompt(
     msg: InboxMessage,
     *,
     broker_url: str,
+    project_dir: Optional[str] = None,
     is_resume: bool = False,
     stale_session_note: Optional[str] = None,
 ) -> str:
@@ -71,6 +74,7 @@ def build_prompt(
         thread_id=msg.thread_id,
         from_address=msg.from_agent,
         broker_url=broker_url.rstrip("/"),
+        project_dir=project_dir or "(unset)",
     )
     if stale_session_note:
         body = body + "\nNOTE: " + stale_session_note + "\n"

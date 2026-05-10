@@ -46,9 +46,21 @@ def test_save_then_load_round_trip(tmp_path: Path) -> None:
     assert loaded.api_key == cfg.api_key
     assert loaded.permission_mode == "acceptEdits"
     assert loaded.runtime == "claude"
+    assert loaded.project_dir == ""
     # Defaults survive the round trip.
     assert loaded.poll_interval_idle == 60
     assert loaded.poll_interval_active == 10
+
+
+def test_save_then_load_project_dir(tmp_path: Path) -> None:
+    cfg = _bare_config(tmp_path)
+    cfg.project_dir = "/Users/example/work/project"
+
+    save_config(cfg)
+
+    loaded = load_config(tmp_path)
+    assert loaded is not None
+    assert loaded.project_dir == "/Users/example/work/project"
 
 
 def test_load_missing_returns_none(tmp_path: Path) -> None:

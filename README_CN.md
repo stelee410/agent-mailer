@@ -172,6 +172,7 @@ amp claude-code
 
 - 用当前目录名生成团队名，例如 `your-project-codex`；
 - 自动创建 `~/amp-teams/<team-name>`；
+- 记录当前目录作为真实项目目录，并在每个智能体目录里创建 `project` 软链接；
 - 在 Broker 上注册或刷新 `planner`、`coder`、`reviewer`、`runner`；
 - 写入 `team.yaml`、`agents/`、`start-team.sh`、`stop-team.sh`；
 - 启动一个 tmux session，里面跑四个 `agent-mailer watch` 进程。
@@ -206,6 +207,11 @@ amp stop project-a-codex
 
 运行前需要本机有 `tmux`，并且对应运行时 CLI 已经登录：`amp codex` 需要
 `codex`，`amp claude-code` 需要 `claude`。
+
+短命令默认使用本地全权限模式：`permission_mode = "bypassPermissions"`。这样 Codex
+或 Claude Code 可以读取真实项目目录，也可以直接访问 Broker，不会因为审批或 sandbox
+卡住。如果想降低权限，可以传 `--permission-mode acceptEdits` 或
+`--permission-mode plan`。
 
 旧的显式命令仍然保留，适合脚本里使用：
 

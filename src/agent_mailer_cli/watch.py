@@ -68,7 +68,7 @@ async def watch_loop(cfg: Config, *, dry_run: bool = False) -> int:
     # when it actually has something to write.
     ensure_global_md(cfg.workdir, agent_name=cfg.agent_name)
     state.append_log("watch_started", agent=cfg.agent_name, address=cfg.address,
-                     dry_run=dry_run)
+                     dry_run=dry_run, project_dir=cfg.project_dir)
 
     # SPEC §13.3: full crash recovery. If inflight.json is older than the
     # 15-minute threshold, treat the message as failed: bump retry count, and
@@ -208,7 +208,7 @@ async def _handle_message(msg: InboxMessage, cfg: Config, state: LocalState,
             )
 
     prompt = build_prompt(
-        msg, broker_url=cfg.broker_url, is_resume=is_resume,
+        msg, broker_url=cfg.broker_url, project_dir=cfg.project_dir or None, is_resume=is_resume,
         stale_session_note=stale_note,
     )
     cmd = _build_runtime_cmd(cfg, prompt, resume_session_id)
@@ -298,6 +298,7 @@ def _build_runtime_cmd(cfg: Config, prompt: str, session_id: Optional[str]) -> l
             codex_command=cfg.codex_command,
             prompt=prompt,
             permission_mode=cfg.permission_mode or "acceptEdits",
+            project_dir=cfg.project_dir or None,
             session_id=session_id,
         )
     return build_claude_cmd(

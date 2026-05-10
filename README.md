@@ -116,6 +116,7 @@ terminal windows manually. `amp codex` does the full bootstrap:
 
 - chooses a team name from the current folder, such as `your-project-codex`;
 - creates `~/amp-teams/<team-name>` automatically;
+- records the current folder as the real project directory and links it into each agent workdir as `project`;
 - registers or refreshes `planner`, `coder`, `reviewer`, and `runner` on the broker;
 - writes `team.yaml`, `agents/`, `start-team.sh`, and `stop-team.sh`;
 - starts one tmux session with four `agent-mailer watch` processes.
@@ -151,6 +152,12 @@ pass everything explicitly with `--broker-url`, `--username`, and `--dir`.
 
 Requirements: `tmux` plus a logged-in local runtime CLI, either `codex` for
 `amp codex` or `claude` for `amp claude-code`.
+
+The short runtime commands default to full local permissions:
+`permission_mode = "bypassPermissions"`. This lets Codex or Claude Code read
+the original project directory and call the broker without approval prompts. To
+run a more restrictive team, pass `--permission-mode acceptEdits` or
+`--permission-mode plan`.
 
 The older explicit commands remain available for scripts:
 

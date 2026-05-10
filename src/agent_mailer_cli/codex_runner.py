@@ -31,9 +31,13 @@ def build_cmd(
     codex_command: str,
     prompt: str,
     permission_mode: str,
+    project_dir: str | None = None,
     session_id: Optional[str] = None,
 ) -> list[str]:
-    cmd = [codex_command, *_permission_args(permission_mode), "exec"]
+    cmd = [codex_command, *_permission_args(permission_mode)]
+    if project_dir:
+        cmd += ["--add-dir", project_dir]
+    cmd.append("exec")
     if session_id:
         cmd += ["resume", "--json", "--skip-git-repo-check", session_id, prompt]
     else:

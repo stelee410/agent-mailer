@@ -40,6 +40,7 @@ class Config:
     runtime: str = "claude"
     claude_command: str = "claude"
     codex_command: str = "codex"
+    project_dir: str = ""
 
     # Convenience: not persisted, set by callers.
     workdir: Optional[Path] = field(default=None, repr=False, compare=False)
@@ -87,7 +88,7 @@ def load_config(workdir: Path) -> Optional[Config]:
     }
     str_fields = {
         "agent_id", "agent_name", "address", "broker_url", "api_key",
-        "permission_mode", "runtime", "claude_command", "codex_command",
+        "permission_mode", "runtime", "claude_command", "codex_command", "project_dir",
     }
     for key, value in data.items():
         if key in str_fields:
@@ -218,6 +219,12 @@ def _render_toml(cfg: Config) -> str:
         lines.append(f'claude_command = "{_escape(cfg.claude_command)}"')
     if cfg.codex_command and cfg.codex_command != "codex":
         lines.append(f'codex_command = "{_escape(cfg.codex_command)}"')
+    if cfg.project_dir:
+        lines.extend([
+            "",
+            "# Original project directory that launched this team.",
+            f'project_dir = "{_escape(cfg.project_dir)}"',
+        ])
     lines.append("")
     return "\n".join(lines)
 

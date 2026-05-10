@@ -39,9 +39,15 @@ def test_normalize_team_name() -> None:
 
 
 def test_render_team_yaml_default_agents() -> None:
-    text = amp.render_team_yaml("demo", "http://broker.test", "acceptEdits")
+    text = amp.render_team_yaml(
+        "demo",
+        "http://broker.test",
+        "acceptEdits",
+        project_dir=Path("/work/project"),
+    )
     assert "team: demo" in text
     assert "broker_url: http://broker.test" in text
+    assert "project_dir: /work/project" in text
     for name in ("demo_planner", "demo_coder", "demo_reviewer", "demo_runner"):
         assert f"name: {name}" in text
     assert "forward 给 demo_coder" in text
@@ -161,6 +167,7 @@ def test_codex_shortcut_creates_suffixed_team(tmp_path: Path, monkeypatch: pytes
     assert captured["name"] == "agent-mailer-codex"
     assert captured["team"] == "agent-mailer-codex"
     assert captured["runtime"] == "codex"
+    assert captured["permission_mode"] == "bypassPermissions"
     assert remembered == [(target, "agent-mailer-codex")]
     assert calls == [(target, "start-team.sh")]
     assert "Start: amp start" in result.output
@@ -205,6 +212,8 @@ def test_create_default_team_writes_agent_workdirs(tmp_path: Path) -> None:
         raise AssertionError(f"unexpected request: {request.method} {request.url}")
 
     transport = httpx.MockTransport(handler)
+    project_dir = tmp_path / "source-project"
+    project_dir.mkdir()
     with httpx.Client(transport=transport) as client:
         agents = amp.create_default_team(
             out_dir=tmp_path,
@@ -213,6 +222,7 @@ def test_create_default_team_writes_agent_workdirs(tmp_path: Path) -> None:
             token="session-token",
             permission_mode="acceptEdits",
             runtime="codex",
+            project_dir=project_dir,
             client=client,
         )
 
@@ -223,6 +233,7 @@ def test_create_default_team_writes_agent_workdirs(tmp_path: Path) -> None:
         "demo_runner",
     ]
     assert (tmp_path / "team.yaml").exists()
+    assert f"project_dir: {project_dir}" in (tmp_path / "team.yaml").read_text()
     assert (tmp_path / "start-team.sh").exists()
     assert (tmp_path / "stop-team.sh").exists()
     assert "agents/" in (tmp_path / ".gitignore").read_text()
@@ -237,6 +248,8 @@ def test_create_default_team_writes_agent_workdirs(tmp_path: Path) -> None:
         assert cfg.api_key == f"amk-{agent['name']}"
         assert cfg.permission_mode == "acceptEdits"
         assert cfg.runtime == "codex"
+        assert cfg.project_dir == str(project_dir)
+        assert (agent_dir / "project").resolve() == project_dir
 
     assert ("POST", "/admin/teams") in requests
     assert requests.count(("POST", "/users/me/agents")) == 4
