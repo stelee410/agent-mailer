@@ -81,9 +81,13 @@ read http://127.0.0.1:9800/setup.md to register your agent to the broker
 
 After the human operator provides an API key, the agent registers itself, downloads its identity files, writes `AGENT.md` or `SOUL.md`, and starts checking its inbox.
 
-## One-command local Codex team
+## One-command local agent team
 
-After installing the CLI globally, create the default four-agent local Codex team from any directory:
+Install the CLI globally once, then create the default four-agent team from any directory:
+
+```bash
+uv tool install --force git+https://github.com/study8677/agent-mailer.git
+```
 
 ```bash
 mkdir -p ~/amp-teams/demo
@@ -104,17 +108,13 @@ cd ~/amp-teams/demo
 amp start
 ```
 
-The default team is `planner`, `coder`, `reviewer`, and `runner`. `amp init` registers the remote agents and writes `team.yaml`, `agents/`, `.agent-mailer/`, `start-team.sh`, and `stop-team.sh`. Stop the team with:
+The default team is `planner`, `coder`, `reviewer`, and `runner`. `amp init` registers or refreshes those agents on the broker, writes `team.yaml`, `agents/`, `start-team.sh`, and `stop-team.sh`, and configures each agent workdir for `agent-mailer watch`. Stop the team with:
 
 ```bash
 amp stop
 ```
 
-Until a Homebrew tap is published, install the command directly from Git:
-
-```bash
-uv tool install git+https://github.com/study8677/agent-mailer.git
-```
+The generated `agents/` directories contain API keys in `.agent-mailer/config.toml`, so `amp init` also updates `.gitignore` for the local team artifacts.
 
 ## Highlights
 
@@ -160,6 +160,74 @@ Each agent receives a generated identity file such as `AGENT.md` or `SOUL.md`. A
 - how to check inbox and send messages,
 - what system prompt and responsibilities it should follow.
 
+## Headless agent runtime: `agent-mailer` CLI
+
+In addition to the broker, this repo ships **`agent-mailer`**, a per-workdir
+client runtime that turns an Agent Mailer Protocol agent into an unattended
+service. Instead of a human running `claude` and typing `/check-inbox`, the
+CLI polls the broker, decides whether to resume an existing claude session
+or start a fresh one, spawns headless Claude Code, and persists state under
+`<workdir>/.agent-mailer/`.
+
+### Install
+
+```bash
+# Per-user, isolated venv (recommended)
+uv tool install agent-mailer
+
+# Or, from this repo while developing
+uv sync
+uv run agent-mailer --help
+```
+
+After registration via `setup.md`, the agent's workdir already has
+`.agent-mailer/config.toml` written. Subsequent runs just need:
+
+```bash
+cd ~/workspaces/coder
+agent-mailer watch
+```
+
+The first call to `watch` launches a small wizard: it confirms the agent
+identity loaded from `AGENT.md` / `config.toml`, asks for the API key if
+missing, and forces an explicit choice of `permission_mode`
+(`acceptEdits` / `bypassPermissions` / `plan`). Subsequent runs read the
+config directly without prompting.
+
+### Subcommand surface
+
+| Group | Commands |
+| --- | --- |
+| Setup | `init`, `config show\|set\|edit`, `verify`, `doctor` |
+| Operate | `watch`, `status`, `logs --tail N --grep PATTERN` |
+| Sessions | `sessions {list,show,invalidate,prune --older-than 14d}` |
+| Memory | `memory {show,edit,ls}` (handoff notes per thread + global) |
+| Recovery | `dead-letter {list,retry <msg_id>,purge}` |
+| Debug | `fetch <msg_id>`, `test-claude` |
+
+`agent-mailer watch` enforces the SPEC's safety invariants: config files
+must be `0600` (directory `0700`), the agent_id in `AGENT.md` must match
+the one in `config.toml` (override with `--ignore-agent-md-mismatch`),
+and exactly one watcher process per workdir (file lock). When a claude
+turn fails, the message goes through up to `max_retries` retries before
+landing in `.agent-mailer/dead_letter.jsonl`, which you can inspect or
+re-queue with `agent-mailer dead-letter`.
+
+### Run as a background service
+
+A reference systemd user unit lives at `packaging/agent-mailer.service.example`.
+Copy it to `~/.config/systemd/user/agent-mailer@<workdir>.service`, edit
+the `WorkingDirectory` line, then:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now agent-mailer@coder.service
+journalctl --user -u agent-mailer@coder.service -f
+```
+
+For a per-workdir CLI specification (state files, prompt templates,
+session resume rules, fault-tolerance state machine), see `SPEC.md`.
+
 ## Supported agent runtimes
 
 | Runtime | Adapter file | Identity file |
@@ -170,18 +238,6 @@ Each agent receives a generated identity file such as `AGENT.md` or `SOUL.md`. A
 | Dreamfactory | `DREAMER.md` | `SOUL.md` |
 | Linkyun Infiniti Agent | `INFINITI.md` | `SOUL.md` |
 | Custom agent | Your loader | `AGENT.md` or `SOUL.md` |
-
-## One-click team via `/zudui` (Claude Code)
-
-If you run Claude Code, the [`zudui` skill](.claude/skills/zudui/) bundled in this repo bootstraps a multi-agent team via fully conversational chat — it collects the roles you want, registers each on the broker, writes per-role `AGENT.md`, and drops a smart tmux/iTerm2 launcher that boots N panes to working state with **zero human keystrokes**. The launcher pre-accepts Claude Code's workspace-trust dialog and auto-dismisses the `--dangerously-skip-permissions` warning so autonomous agents don't deadlock at boot.
-
-```bash
-# In Claude Code, from your team's mother dir:
-> /zudui            # conversational team setup
-> ./start-team.sh   # spawns the tmux session; agents start polling
-```
-
-Pairs with two sibling skills: **`shangban`** (上班) — per-pane inbox watcher running every minute via `/loop` cron — and **`xiaban`** (下班) — clean stop, deletes the recurring cron. See [`.claude/skills/zudui/SKILL.md`](.claude/skills/zudui/SKILL.md) for the full protocol.
 
 ## API overview
 

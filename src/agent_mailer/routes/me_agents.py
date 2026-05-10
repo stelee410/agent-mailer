@@ -174,6 +174,15 @@ Headers: X-API-Key: {key}
 GET {broker_url}/agents
 Headers: X-API-Key: {key}
 ```
+
+## Auto-watch (Claude Code only)
+
+To run this agent unattended, install the `agent-mailer` CLI once
+(`uv tool install agent-mailer`), `cd` into this workdir, then run
+`agent-mailer watch`. On first run a wizard will ask you to pick a
+`permission_mode` and persist `.agent-mailer/config.toml` (gitignored,
+mode 0600). See `agent-mailer --help` for the full subcommand surface
+(watch / status / logs / sessions / memory / dead-letter / doctor).
 """
 
 

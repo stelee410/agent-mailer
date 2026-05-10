@@ -9,7 +9,7 @@
 
 **Agent Mailer Protocol (AMP)** 为每个 AI Agent 提供身份、邮箱地址、收件箱和线程化消息协议。它适合 Planner、Coder、Reviewer、Operator 等多个智能体长期协作，而不是把所有上下文塞进同一个聊天窗口。
 
-[在线演示](https://amp.linkyun.co) · [控制台](https://amp.linkyun.co/admin/ui) · [API 文档](https://amp.linkyun.co/docs) · [多 Agent 教程](docs/tutorial-cn.md) · [接入指南](https://amp.linkyun.co/setup.md) · [English README](README.md)
+[在线演示](https://amp.linkyun.co) · [控制台](https://amp.linkyun.co/admin/ui) · [API 文档](https://amp.linkyun.co/docs) · [接入指南](https://amp.linkyun.co/setup.md) · [English README](README.md)
 
 ![Agent Mailer 中文首页截图](docs/amp-home.png)
 
@@ -75,8 +75,6 @@ Planner Agent  --forward-->  Coder Agent  --forward-->  Reviewer Agent
 
 ## 快速开始
 
-想直接使用云端演示站跑通 Planner、Coder、Reviewer、Runner 四个 Agent 的完整协作流程，请看 [多 Agent 使用教程](docs/tutorial-cn.md)。
-
 ### 1. 安装依赖
 
 ```bash
@@ -112,41 +110,6 @@ uv run uvicorn agent_mailer.main:app --port 9800
 
 首次启动时，服务端会在控制台打印 bootstrap invite code。用它注册第一个用户，该用户会自动成为 superadmin。
 
-## 一键创建本地 Codex 团队
-
-全局安装 CLI 后，可以在任意本地目录一键生成默认 4 Agent 团队：
-
-```bash
-mkdir -p ~/amp-teams/demo
-cd ~/amp-teams/demo
-amp init
-```
-
-第一次运行时，`amp init` 会询问 broker URL、用户名和密码。之后会复用已保存的登录信息。你也可以显式传入全部参数：
-
-```bash
-amp init \
-  --team demo \
-  --dir ~/amp-teams/demo \
-  --broker-url http://your-broker:9800 \
-  --username fanjingwen
-
-cd ~/amp-teams/demo
-amp start
-```
-
-默认团队包含 `planner`、`coder`、`reviewer`、`runner` 四个角色。`amp init` 会注册远程 Agent，并在本地生成 `team.yaml`、`agents/`、`.agent-mailer/`、`start-team.sh` 和 `stop-team.sh`。停止团队：
-
-```bash
-amp stop
-```
-
-在 Homebrew tap 发布前，可以先直接从 Git 安装全局命令：
-
-```bash
-uv tool install git+https://github.com/study8677/agent-mailer.git
-```
-
 ## 注册 Agent
 
 在 Operator Console 创建用户和 API Key 后，把下面这段话发给要接入的 Agent：
@@ -174,17 +137,104 @@ Agent 会自动完成：
 | Linkyun Infiniti Agent | `INFINITI.md` | `SOUL.md` |
 | 自研 Agent | 自定义加载器 | `AGENT.md` 或 `SOUL.md` |
 
-## 通过 `/zudui` 一键拉起团队 (Claude Code)
+## 一条命令创建本地团队
 
-仓库里自带的 [`zudui` skill](.claude/skills/zudui/) 通过纯对话流程拉起多 Agent 团队 —— 收集你要的角色,在 Broker 上注册,为每个角色写 `AGENT.md`,然后生成智能 tmux/iTerm2 launcher,**零按键**把 N 个 pane 启动到工作状态。Launcher 自动预批准 Claude Code 的 workspace-trust 弹框,并自动关掉 `--dangerously-skip-permissions` 警告,让自动化 agent 不会卡在启动阶段。
+先全局安装一次 CLI，然后可以在任意目录里用 `amp` 创建默认四智能体团队：
 
 ```bash
-# 在 Claude Code 里,母目录下:
-> /zudui            # 对话式组队
-> ./start-team.sh   # 起 tmux session,agent 开始轮询
+uv tool install --force git+https://github.com/study8677/agent-mailer.git
 ```
 
-配套两个姊妹 skill: **`shangban`**(上班)—— 每个 pane 的收件箱守望者,通过 `/loop` cron 每分钟跑一次;**`xiaban`**(下班)—— 干净下班,删掉 recurring cron。详细见 [`.claude/skills/zudui/SKILL.md`](.claude/skills/zudui/SKILL.md)。
+```bash
+mkdir -p ~/amp-teams/demo
+cd ~/amp-teams/demo
+amp init
+amp start
+```
+
+首次运行 `amp init` 会询问 Broker URL、用户名和密码；登录态会保存在
+`~/.agent-mailer/credentials.json`，后续复用。也可以显式传参：
+
+```bash
+amp init \
+  --team demo \
+  --dir ~/amp-teams/demo \
+  --broker-url http://your-broker:9800 \
+  --username fanjingwen
+```
+
+默认团队包含 `planner`、`coder`、`reviewer`、`runner`。`amp init` 会在 Broker
+上注册或刷新这四个 Agent，并在当前目录写入 `team.yaml`、`agents/`、
+`start-team.sh`、`stop-team.sh`。每个 `agents/<name>/` 都已经配置好
+`agent-mailer watch` 所需的 `.agent-mailer/config.toml` 和 `AGENT.md`。
+
+停止团队：
+
+```bash
+amp stop
+```
+
+`agents/` 内含 API Key，所以 `amp init` 会自动把本地团队产物加入 `.gitignore`。
+
+## 无人值守运行时：`agent-mailer` CLI
+
+除 Broker 外，本仓库还提供 **`agent-mailer`** 每 workdir 客户端运行时。它把
+Agent Mailer Protocol 中的某个 agent 升级为无人值守服务：定时轮询 broker
+inbox、按 thread 决定 resume 还是冷启 Claude session、spawn headless Claude
+Code，所有状态落在 `<workdir>/.agent-mailer/`。
+
+### 安装
+
+```bash
+# 推荐：用户级隔离 venv
+uv tool install agent-mailer
+
+# 或本仓库内开发
+uv sync
+uv run agent-mailer --help
+```
+
+通过 `setup.md` 注册后 agent workdir 中已有 `.agent-mailer/config.toml`，后续直接：
+
+```bash
+cd ~/workspaces/coder
+agent-mailer watch
+```
+
+第一次 `watch` 会启动 wizard：确认从 `AGENT.md` / `config.toml` 读到的身份，
+缺 api_key 则询问，并**强制**用户从 `acceptEdits` / `bypassPermissions` / `plan`
+中显式选择 `permission_mode`（不接受静默默认）。后续运行直接读配置。
+
+### 子命令面板
+
+| 组 | 命令 |
+| --- | --- |
+| 配置 | `init`、`config show\|set\|edit`、`verify`、`doctor` |
+| 运行 | `watch`、`status`、`logs --tail N --grep PATTERN` |
+| 会话 | `sessions {list,show,invalidate,prune --older-than 14d}` |
+| 记忆 | `memory {show,edit,ls}`（每 thread 交班笔记 + 全局笔记）|
+| 容错 | `dead-letter {list,retry <msg_id>,purge}` |
+| 调试 | `fetch <msg_id>`、`test-claude` |
+
+`agent-mailer watch` 启动时强制 SPEC 安全不变量：config 权限须为 `0600`、目录 `0700`；
+`AGENT.md` 与 `config.toml` 中 `agent_id` 必须一致（用 `--ignore-agent-md-mismatch`
+显式覆盖）；同 workdir 同时只能有一个 watcher（文件锁）。Claude 失败的消息会按
+`max_retries` 重试，重试用尽后写入 `.agent-mailer/dead_letter.jsonl`，可用
+`agent-mailer dead-letter` 子命令检视和重新入队。
+
+### 作为系统服务运行
+
+参考 systemd user unit：`packaging/agent-mailer.service.example`。复制到
+`~/.config/systemd/user/agent-mailer@<workdir>.service`，修改 `WorkingDirectory`，然后：
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now agent-mailer@coder.service
+journalctl --user -u agent-mailer@coder.service -f
+```
+
+详细规格（状态文件、prompt 模板、session resume 规则、容错状态机）见
+`SPEC.md`。
 
 ## API 概览
 

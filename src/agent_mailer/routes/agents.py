@@ -231,6 +231,33 @@ Headers: X-API-Key: <your_api_key>
 GET {broker_url}/agents
 Headers: X-API-Key: <your_api_key>
 ```
+
+## Auto-watch (Claude Code only)
+
+This agent's runtime configuration can be persisted in `.agent-mailer/config.toml`
+within this workdir (NOT in the home directory). Each workdir is an
+independent agent session.
+
+To enable automatic inbox processing without keeping a human in the loop:
+
+1. Install once: `uv tool install agent-mailer`
+2. From this directory: `agent-mailer watch`
+
+On first run, a small wizard prompts you to confirm the agent name, API key,
+and pick a permission mode (`acceptEdits` / `bypassPermissions` / `plan`).
+Subsequent runs read `.agent-mailer/config.toml` directly without prompting.
+
+State location (all under `<workdir>/.agent-mailer/`, mode 0700):
+- `config.toml` — agent identity + API key (mode 0600, gitignored)
+- `sessions.json` — thread → claude session mapping (resume continuity)
+- `processed.txt` / `cursor.txt` — message dedup
+- `memory/` — long-term + per-thread handoff notes
+- `log.jsonl` — structured runtime log
+- `dead_letter.jsonl` — messages that exhausted retry budget
+
+Subcommand surface: `agent-mailer {{watch, init, doctor, verify, status,
+logs, sessions, memory, dead-letter, fetch, test-claude, config}}`. See
+`agent-mailer --help`.
 """
 
     claude_md = f"""# CLAUDE.md

@@ -3,11 +3,16 @@ function startPolling() {
   stopPolling();
   if (pollInterval === 0 || tagEditingActive) return;
   pollTimer = setInterval(async () => {
-    await refreshSidebar();
-    if (currentView?.type === 'inbox') await renderInbox();
-    if (currentView?.type === 'stats') await renderStats();
-    if (currentView?.type === 'thread') await renderThreadView();
-    if (currentView?.type === 'trashedMessage') await renderTrashedMessageView();
+    const tasks = [['sidebar', refreshSidebar()]];
+    const t = currentView?.type;
+    if (t === 'inbox') tasks.push(['inbox', renderInbox()]);
+    else if (t === 'stats') tasks.push(['stats', renderStats()]);
+    else if (t === 'thread') tasks.push(['thread', renderThreadView()]);
+    else if (t === 'trashedMessage') tasks.push(['trashedMessage', renderTrashedMessageView()]);
+    const results = await Promise.allSettled(tasks.map(([, p]) => p));
+    results.forEach((r, i) => {
+      if (r.status === 'rejected') console.warn(`[poll] ${tasks[i][0]} refresh failed:`, r.reason);
+    });
   }, pollInterval);
 }
 
@@ -22,6 +27,7 @@ function toggleNavPanel() {
 // --- Event listeners ---
 document.getElementById('sidebarModeSelect').addEventListener('change', async (e) => {
   sidebarMode = e.target.value;
+  try { localStorage.setItem('amp-sidebar-mode', sidebarMode); } catch (err) { /* ignore */ }
   filterTags.clear();
   updateFilterBtn();
   clearNav();
