@@ -290,6 +290,85 @@ cd ~/workspace/coder && openclaw
 
 ---
 
+## 第四步：（可选）让 Agent 无人值守运行
+
+如果 Agent 是基于 **Claude Code** 的（CLAUDE.md + AGENT.md 模式），可以安装
+`agent-mailer` CLI，让它自动轮询 broker、接收到邮件后 spawn headless claude 处理，
+不再需要人工介入。
+
+#### 4.1 在 workdir 内写入 runtime 配置
+
+注册成功后，在 agent 工作目录写入 `.agent-mailer/config.toml`（注意这个文件**含
+api_key**，必须严格 0600，且必须加入 `.gitignore` 不进 git）：
+
+```bash
+mkdir -p .agent-mailer
+chmod 700 .agent-mailer
+
+cat > .agent-mailer/config.toml <<EOF
+agent_id    = "<注册返回的 agent_id>"
+agent_name  = "<agent name>"
+address     = "<注册返回的 address>"
+broker_url  = "https://amp.linkyun.co"
+api_key     = "<your_api_key>"
+
+# permission_mode 在第一次 watch 启动时由 wizard 让你选择 1/2/3
+EOF
+chmod 600 .agent-mailer/config.toml
+
+# 防止凭证误提交
+grep -q '^.agent-mailer/$' .gitignore 2>/dev/null || echo '.agent-mailer/' >> .gitignore
+```
+
+字段说明：
+
+- `agent_id` / `address` 由注册接口返回
+- `broker_url` 是 Broker 域名（生产用 `https://amp.linkyun.co`）
+- `api_key` 是当前用户的 API Key（不要提交到 git）
+- `permission_mode` 留空 — 第一次 `agent-mailer watch` 时 wizard 会让你**显式**
+  在 `acceptEdits` / `bypassPermissions` / `plan` 中选一个（绝不静默默认）
+
+#### 4.2 安装 CLI 并启动 watcher
+
+```bash
+# 一次性全局安装（用 uv tool 隔离环境）
+uv tool install agent-mailer
+
+# 在 agent workdir 启动 watcher
+cd ~/workspace/coder
+agent-mailer watch
+```
+
+第一次启动会跳出 wizard 询问 `permission_mode`，选择后写入 config.toml。
+后续运行直接进入轮询循环（默认 idle 60s / active 10s）。
+
+收到邮件后，watcher 会 spawn `claude -p "..." --output-format json` 处理；
+同 thread 的后续邮件自动 `--resume <session_id>`，复用上次的 claude 会话。
+
+#### 4.3 健康检查与运维
+
+```bash
+# 检查环境（claude 在 PATH、config 权限、broker 连通、AGENT.md 一致）
+agent-mailer doctor
+
+# 查看 watcher 运行状态
+agent-mailer status
+
+# 实时跟踪结构化日志
+agent-mailer logs --tail 30 --grep process_done
+
+# 查看 thread → claude session 映射
+agent-mailer sessions list
+
+# 处理重试用尽的消息
+agent-mailer dead-letter list
+```
+
+更多子命令面板见 [README — `agent-mailer` CLI](README.md#headless-agent-runtime-agent-mailer-cli)。
+作为系统服务运行的 systemd unit 模板见 `packaging/agent-mailer.service.example`。
+
+---
+
 ## 设计要点
 
 - **`system_prompt` 是注册时的必填项**：它定义了 Agent 的核心行为，不同的身份提示词让同一个底层 LLM 扮演不同角色

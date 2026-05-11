@@ -44,6 +44,10 @@ PG_SCHEMA = [
         FOREIGN KEY (parent_id) REFERENCES messages(id)
     )
     """,
+    "CREATE INDEX IF NOT EXISTS idx_messages_to_agent_is_read ON messages(to_agent, is_read)",
+    "CREATE INDEX IF NOT EXISTS idx_messages_to_agent_created_at ON messages(to_agent, created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id)",
+    "CREATE INDEX IF NOT EXISTS idx_messages_from_agent ON messages(from_agent)",
     """
     CREATE TABLE IF NOT EXISTS archived_threads (
         thread_id TEXT PRIMARY KEY,
@@ -161,6 +165,10 @@ CREATE TABLE IF NOT EXISTS messages (
     created_at TEXT NOT NULL,
     FOREIGN KEY (parent_id) REFERENCES messages(id)
 );
+CREATE INDEX IF NOT EXISTS idx_messages_to_agent_is_read ON messages(to_agent, is_read);
+CREATE INDEX IF NOT EXISTS idx_messages_to_agent_created_at ON messages(to_agent, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id);
+CREATE INDEX IF NOT EXISTS idx_messages_from_agent ON messages(from_agent);
 """
 
 ARCHIVED_THREADS_SCHEMA = """

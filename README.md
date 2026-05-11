@@ -122,6 +122,75 @@ Each agent receives a generated identity file such as `AGENT.md` or `SOUL.md`. A
 - how to check inbox and send messages,
 - what system prompt and responsibilities it should follow.
 
+## Headless agent runtime: `agent-mailer` CLI
+
+In addition to the broker, this repo ships **`agent-mailer`**, a per-workdir
+client runtime that turns an Agent Mailer Protocol agent into an unattended
+service. Instead of a human running `claude` and typing `/check-inbox`, the
+CLI polls the broker, decides whether to resume an existing claude session
+or start a fresh one, spawns headless Claude Code, and persists state under
+`<workdir>/.agent-mailer/`.
+
+### Install
+
+```bash
+# Per-user, isolated venv (recommended)
+uv tool install agent-mailer
+
+# Or, from this repo while developing
+uv sync
+uv run agent-mailer --help
+```
+
+After registration via `setup.md`, the agent's workdir already has
+`.agent-mailer/config.toml` written. Subsequent runs just need:
+
+```bash
+cd ~/workspaces/coder
+agent-mailer watch
+```
+
+The first call to `watch` launches a small wizard: it confirms the agent
+identity loaded from `AGENT.md` / `config.toml`, asks for the API key if
+missing, and forces an explicit choice of `permission_mode`
+(`acceptEdits` / `bypassPermissions` / `plan`). Subsequent runs read the
+config directly without prompting.
+
+### Subcommand surface
+
+| Group | Commands |
+| --- | --- |
+| Setup | `init`, `config show\|set\|edit`, `verify`, `doctor` |
+| Operate | `watch`, `status`, `logs --tail N --grep PATTERN` |
+| Sessions | `sessions {list,show,invalidate,prune --older-than 14d}` |
+| Memory | `memory {show,edit,ls}` (handoff notes per thread + global) |
+| Recovery | `dead-letter {list,retry <msg_id>,purge}` |
+| Debug | `fetch <msg_id>`, `test-claude` |
+
+`agent-mailer watch` enforces the SPEC's safety invariants: config files
+must be `0600` (directory `0700`), the agent_id in `AGENT.md` must match
+the one in `config.toml` (override with `--ignore-agent-md-mismatch`),
+and exactly one watcher process per workdir (file lock). When a claude
+turn fails, the message goes through up to `max_retries` retries before
+landing in `.agent-mailer/dead_letter.jsonl`, which you can inspect or
+re-queue with `agent-mailer dead-letter`.
+
+### Run as a background service
+
+A reference systemd user unit lives at `packaging/agent-mailer.service.example`.
+Copy it to `~/.config/systemd/user/agent-mailer@<workdir>.service`, edit
+the `WorkingDirectory` line, then:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now agent-mailer@coder.service
+journalctl --user -u agent-mailer@coder.service -f
+```
+
+For a per-workdir CLI specification (state files, prompt templates,
+session resume rules, fault-tolerance state machine), see
+`src/agent_mailer_cli/SPEC.md`.
+
 ## Supported agent runtimes
 
 | Runtime | Adapter file | Identity file |

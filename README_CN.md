@@ -148,6 +148,65 @@ Agent 会自动完成：
 ```
 
 配套两个姊妹 skill: **`shangban`**(上班)—— 每个 pane 的收件箱守望者,通过 `/loop` cron 每分钟跑一次;**`xiaban`**(下班)—— 干净下班,删掉 recurring cron。详细见 [`.claude/skills/zudui/SKILL.md`](.claude/skills/zudui/SKILL.md)。
+## 无人值守运行时：`agent-mailer` CLI
+
+除 Broker 外，本仓库还提供 **`agent-mailer`** 每 workdir 客户端运行时。它把
+Agent Mailer Protocol 中的某个 agent 升级为无人值守服务：定时轮询 broker
+inbox、按 thread 决定 resume 还是冷启 Claude session、spawn headless Claude
+Code，所有状态落在 `<workdir>/.agent-mailer/`。
+
+### 安装
+
+```bash
+# 推荐：用户级隔离 venv
+uv tool install agent-mailer
+
+# 或本仓库内开发
+uv sync
+uv run agent-mailer --help
+```
+
+通过 `setup.md` 注册后 agent workdir 中已有 `.agent-mailer/config.toml`，后续直接：
+
+```bash
+cd ~/workspaces/coder
+agent-mailer watch
+```
+
+第一次 `watch` 会启动 wizard：确认从 `AGENT.md` / `config.toml` 读到的身份，
+缺 api_key 则询问，并**强制**用户从 `acceptEdits` / `bypassPermissions` / `plan`
+中显式选择 `permission_mode`（不接受静默默认）。后续运行直接读配置。
+
+### 子命令面板
+
+| 组 | 命令 |
+| --- | --- |
+| 配置 | `init`、`config show\|set\|edit`、`verify`、`doctor` |
+| 运行 | `watch`、`status`、`logs --tail N --grep PATTERN` |
+| 会话 | `sessions {list,show,invalidate,prune --older-than 14d}` |
+| 记忆 | `memory {show,edit,ls}`（每 thread 交班笔记 + 全局笔记）|
+| 容错 | `dead-letter {list,retry <msg_id>,purge}` |
+| 调试 | `fetch <msg_id>`、`test-claude` |
+
+`agent-mailer watch` 启动时强制 SPEC 安全不变量：config 权限须为 `0600`、目录 `0700`；
+`AGENT.md` 与 `config.toml` 中 `agent_id` 必须一致（用 `--ignore-agent-md-mismatch`
+显式覆盖）；同 workdir 同时只能有一个 watcher（文件锁）。Claude 失败的消息会按
+`max_retries` 重试，重试用尽后写入 `.agent-mailer/dead_letter.jsonl`，可用
+`agent-mailer dead-letter` 子命令检视和重新入队。
+
+### 作为系统服务运行
+
+参考 systemd user unit：`packaging/agent-mailer.service.example`。复制到
+`~/.config/systemd/user/agent-mailer@<workdir>.service`，修改 `WorkingDirectory`，然后：
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now agent-mailer@coder.service
+journalctl --user -u agent-mailer@coder.service -f
+```
+
+详细规格（状态文件、prompt 模板、session resume 规则、容错状态机）见
+`src/agent_mailer_cli/SPEC.md`。
 
 ## API 概览
 

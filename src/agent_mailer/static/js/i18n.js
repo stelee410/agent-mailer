@@ -266,6 +266,8 @@
       'compose.memoryReference': '记忆引用',
       'compose.memoryUntitled': '未命名记忆',
       'compose.memoryNoContent': '暂无内容',
+      'compose.atNoTeam': '此 Agent 无 team，无法引用知识库',
+      'compose.atPreview': '预览备忘录',
 
       // --- Stats ---
       'stats.title': 'Agent 统计',
@@ -308,6 +310,9 @@
       'apikeys.confirmDeactivateTitle': '禁用 API Key',
       'apikeys.confirmDeleteTitle': '删除 API Key',
       'apikeys.confirmDelete': '永久删除密钥 "{name}"？此操作不可撤销。',
+      'apikeys.inUseTitle': '无法删除此 API Key',
+      'apikeys.inUseBody': '以下 Agent 仍在使用该密钥，请先删除或停用它们后再尝试删除此 API Key。',
+      'apikeys.deleteFailedGeneric': '删除失败：{status} {detail}',
       'apikeys.changePassword': '修改密码',
       'apikeys.currentPassword': '当前密码',
       'apikeys.newPassword': '新密码',
@@ -769,6 +774,8 @@
       'compose.memoryReference': 'Memory reference',
       'compose.memoryUntitled': 'Untitled memory',
       'compose.memoryNoContent': 'No content',
+      'compose.atNoTeam': 'This agent has no team — knowledge base reference unavailable',
+      'compose.atPreview': 'Preview memory',
 
       // --- Stats ---
       'stats.title': 'Agent Statistics',
@@ -811,6 +818,9 @@
       'apikeys.confirmDeactivateTitle': 'Deactivate API Key',
       'apikeys.confirmDeleteTitle': 'Delete API Key',
       'apikeys.confirmDelete': 'Permanently delete key "{name}"? This cannot be undone.',
+      'apikeys.inUseTitle': 'Cannot delete this API Key',
+      'apikeys.inUseBody': 'The following agents are still using this key. Delete or deactivate them before deleting this API key.',
+      'apikeys.deleteFailedGeneric': 'Delete failed: {status} {detail}',
       'apikeys.changePassword': 'Change Password',
       'apikeys.currentPassword': 'Current Password',
       'apikeys.newPassword': 'New Password',

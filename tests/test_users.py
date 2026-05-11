@@ -272,19 +272,32 @@ async def test_api_key_lifecycle(client, superadmin):
     # This should return 401 since X-API-Key is not a JWT bearer token
     # API key auth is a separate dependency
 
-    # Deactivate
+    # Deactivate (recoverable: row is kept, is_active flips to false)
+    resp = await c.post(
+        f"/users/api-keys/{key_id}/deactivate",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+
+    resp = await c.get(
+        "/users/api-keys", headers={"Authorization": f"Bearer {token}"}
+    )
+    keys = resp.json()
+    assert keys[0]["is_active"] is False
+
+    # DELETE permanently removes the row (regression guard for ae289a4 hotfix —
+    # users hitting "delete" expect the key to disappear from the list, not stay
+    # with an "inactive" badge. Pre-hotfix DELETE was a duplicate of deactivate).
     resp = await c.delete(
         f"/users/api-keys/{key_id}",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 204
 
-    # Verify deactivated
     resp = await c.get(
         "/users/api-keys", headers={"Authorization": f"Bearer {token}"}
     )
-    keys = resp.json()
-    assert keys[0]["is_active"] is False
+    assert resp.json() == []
 
 
 async def test_api_key_not_found(client, superadmin):
@@ -294,6 +307,71 @@ async def test_api_key_not_found(client, superadmin):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 404
+
+
+async def test_delete_api_key_blocked_when_bound_to_active_agent(client, superadmin):
+    """Hotfix ae289a4 contract: deleting an agent-bound key returns 409 with the
+    agent's identity, and the underlying api_keys row is preserved."""
+    from datetime import datetime, timezone
+
+    c, token, user = superadmin
+    db = c._transport.app.state.db  # noqa
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Seed: an active agent owned by the test user
+    await db.execute(
+        "INSERT INTO agents (id, name, address, role, description, system_prompt, "
+        "created_at, tags, user_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            "agent-xyz",
+            "billing-bot",
+            "billing-bot@test.local",
+            "worker",
+            "",
+            "",
+            now,
+            "[]",
+            user["id"],
+            "active",
+        ),
+    )
+    # And an api_keys row whose name encodes that agent — the convention used
+    # everywhere agents auto-provision keys (me_agents.py / superadmin.py).
+    await db.execute(
+        "INSERT INTO api_keys (id, user_id, key_hash, name, created_at, is_active) "
+        "VALUES (?, ?, ?, ?, ?, 1)",
+        ("key-xyz", user["id"], "hash-xyz", "agent:agent-xyz", now),
+    )
+    await db.commit()
+
+    resp = await c.delete(
+        "/users/api-keys/key-xyz",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 409
+    body = resp.json()
+    assert body["error"] == "api_key_in_use"
+    assert body["agents"] == [
+        {"id": "agent-xyz", "name": "billing-bot", "address": "billing-bot@test.local"}
+    ]
+
+    # Row still there — refused, not soft-revoked
+    cursor = await db.execute("SELECT id FROM api_keys WHERE id = ?", ("key-xyz",))
+    assert await cursor.fetchone() is not None
+
+    # Now mark the agent deleted; the same DELETE should succeed and remove the row
+    await db.execute(
+        "UPDATE agents SET status = 'deleted' WHERE id = ?", ("agent-xyz",)
+    )
+    await db.commit()
+
+    resp = await c.delete(
+        "/users/api-keys/key-xyz",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 204
+    cursor = await db.execute("SELECT id FROM api_keys WHERE id = ?", ("key-xyz",))
+    assert await cursor.fetchone() is None
 
 
 # --- Superadmin endpoints ---
