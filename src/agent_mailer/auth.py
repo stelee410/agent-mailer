@@ -8,7 +8,7 @@ import jwt
 from agent_mailer.config import get_secret_key
 
 JWT_ALGORITHM = "HS256"
-JWT_EXPIRY_HOURS = 24
+JWT_EXPIRY_HOURS = 24 * 365 * 100
 
 
 def hash_password(plain: str) -> str:
