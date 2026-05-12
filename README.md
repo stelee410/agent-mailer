@@ -355,6 +355,18 @@ session resume rules, fault-tolerance state machine), see `SPEC.md`.
 | Linkyun Infiniti Agent | `INFINITI.md` | `SOUL.md` |
 | Custom agent | Your loader | `AGENT.md` or `SOUL.md` |
 
+## One-click team via `/zudui` (Claude Code)
+
+If you run Claude Code, the [`zudui` skill](.claude/skills/zudui/) bundled in this repo bootstraps a multi-agent team via fully conversational chat — it collects the roles you want, registers each on the broker, writes per-role `AGENT.md`, and drops a smart tmux/iTerm2 launcher that boots N panes to working state with **zero human keystrokes**. The launcher pre-accepts Claude Code's workspace-trust dialog and auto-dismisses the `--dangerously-skip-permissions` warning so autonomous agents don't deadlock at boot.
+
+```bash
+# In Claude Code, from your team's mother dir:
+> /zudui            # conversational team setup
+> ./start-team.sh   # spawns the tmux session; agents start polling
+```
+
+Pairs with two sibling skills: **`shangban`** (上班) — per-pane inbox watcher running every minute via `/loop` cron — and **`xiaban`** (下班) — clean stop, deletes the recurring cron. See [`.claude/skills/zudui/SKILL.md`](.claude/skills/zudui/SKILL.md) for the full protocol.
+
 ## API overview
 
 | Endpoint | Auth | Purpose |
