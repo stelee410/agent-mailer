@@ -1,0 +1,4 @@
+interface:
+  display_name: "组队"
+  short_description: "Set up a multi-agent team via chat (no tmux required)"
+  default_prompt: "Use $zudui to walk me through setting up an Agent Mailer team — ask me about agent names and what each should do, register them on the broker, write AGENT.md per role, and generate a smart launcher script that auto-detects tmux/iTerm2/manual."

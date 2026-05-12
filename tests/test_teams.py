@@ -282,3 +282,128 @@ async def test_visibility_no_agent_id_returns_all(client):
 async def test_visibility_agent_not_found(client):
     resp = await client.get("/agents?agent_id=fake-id")
     assert resp.status_code == 404
+
+
+# --- /admin/teams/bootstrap ---
+
+
+async def test_bootstrap_team_happy_path(client):
+    resp = await client.post("/admin/teams/bootstrap", json={
+        "name": "BootSquad",
+        "description": "demo team",
+        "agents": [
+            {"name": "planner", "role": "planner", "system_prompt": "I plan."},
+            {"name": "coder", "role": "coder", "system_prompt": "I code."},
+            {"name": "reviewer", "role": "reviewer", "system_prompt": "I review."},
+        ],
+    })
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+
+    assert body["team"]["name"] == "BootSquad"
+    assert body["team"]["agent_count"] == 3
+    assert len(body["agents"]) == 3
+
+    by_name = {a["name"]: a for a in body["agents"]}
+    assert set(by_name) == {"planner", "coder", "reviewer"}
+
+    for name, agent in by_name.items():
+        assert agent["address"] == f"{name}{DOMAIN_SUFFIX}"
+        assert agent["api_key_plaintext"].startswith("amk_")
+        # AGENT.md should use env-var placeholder, not the inline one.
+        assert "${AMP_API_KEY}" in agent["agent_md"]
+        assert "<your_api_key>" not in agent["agent_md"]
+        assert agent["address"] in agent["agent_md"]
+        assert agent["agent_id"] in agent["agent_md"]
+
+    # Agents should actually be attached to the team.
+    detail = await client.get(f"/admin/teams/{body['team']['id']}")
+    assert detail.status_code == 200
+    detail_agents = {a["name"] for a in detail.json()["agents"]}
+    assert detail_agents == {"planner", "coder", "reviewer"}
+
+
+async def test_bootstrap_team_address_local_override(client):
+    resp = await client.post("/admin/teams/bootstrap", json={
+        "name": "OverrideSquad",
+        "agents": [
+            {"name": "Planner Bot", "address_local": "planner-1", "system_prompt": "."},
+        ],
+    })
+    assert resp.status_code == 200
+    addr = resp.json()["agents"][0]["address"]
+    assert addr == f"planner-1{DOMAIN_SUFFIX}"
+
+
+async def test_bootstrap_team_requires_at_least_one_agent(client):
+    resp = await client.post("/admin/teams/bootstrap", json={
+        "name": "Empty", "agents": [],
+    })
+    assert resp.status_code == 422
+
+
+async def test_bootstrap_team_duplicate_local_in_request(client):
+    resp = await client.post("/admin/teams/bootstrap", json={
+        "name": "DupLocal",
+        "agents": [
+            {"name": "a", "address_local": "shared", "system_prompt": "."},
+            {"name": "b", "address_local": "shared", "system_prompt": "."},
+        ],
+    })
+    assert resp.status_code == 400
+    assert "shared" in resp.json()["detail"]
+
+
+async def test_bootstrap_team_invalid_local_part(client):
+    resp = await client.post("/admin/teams/bootstrap", json={
+        "name": "BadLocal",
+        "agents": [{"name": "ok", "address_local": "_bad_", "system_prompt": "."}],
+    })
+    assert resp.status_code == 400
+
+
+async def test_bootstrap_team_name_collision(client):
+    await client.post("/admin/teams", json={"name": "Existing"})
+    resp = await client.post("/admin/teams/bootstrap", json={
+        "name": "Existing",
+        "agents": [{"name": "x", "system_prompt": "."}],
+    })
+    assert resp.status_code == 409
+
+
+async def test_bootstrap_team_address_collision_is_atomic(client):
+    # Pre-create an agent that will collide with one of the bootstrap entries.
+    await _register_agent(client, "planner")
+
+    resp = await client.post("/admin/teams/bootstrap", json={
+        "name": "WillFail",
+        "agents": [
+            {"name": "coder", "system_prompt": "."},
+            {"name": "planner", "system_prompt": "."},  # collides
+        ],
+    })
+    assert resp.status_code == 409
+
+    # Atomicity: no team created, no "coder" agent created either.
+    teams = (await client.get("/admin/teams")).json()
+    assert "WillFail" not in {t["name"] for t in teams}
+
+    agents_resp = await client.get("/agents")
+    addresses = {a["address"] for a in agents_resp.json()}
+    assert f"coder{DOMAIN_SUFFIX}" not in addresses
+
+
+async def test_bootstrap_team_api_keys_actually_work(client):
+    resp = await client.post("/admin/teams/bootstrap", json={
+        "name": "WorkingKeys",
+        "agents": [{"name": "live", "role": "coder", "system_prompt": "."}],
+    })
+    assert resp.status_code == 200
+    agent = resp.json()["agents"][0]
+
+    # The freshly-issued API key should authenticate the agent against its mailbox.
+    inbox = await client.get(
+        f"/messages/inbox/{agent['address']}?agent_id={agent['agent_id']}",
+        headers={"X-API-Key": agent["api_key_plaintext"]},
+    )
+    assert inbox.status_code == 200

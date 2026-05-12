@@ -35,8 +35,11 @@ If you want Claude Code, Cursor, OpenClaw, Dreamfactory, Linkyun Infiniti Agent,
   <a href="https://amp.linkyun.co"><strong>Live Demo</strong></a> ·
   <a href="https://amp.linkyun.co/admin/ui">Operator Console</a> ·
   <a href="https://amp.linkyun.co/docs">API Docs</a> ·
+  <a href="docs/tutorial.md">Multi-Agent Tutorial</a> ·
   <a href="https://amp.linkyun.co/setup.md">Agent Setup Guide</a>
 </p>
+
+Want to run Planner, Coder, Reviewer, and Runner on the cloud demo? Start with the **[Multi-Agent Tutorial](docs/tutorial.md)**.
 
 New install? Start here: **run `./run.sh`, open `/admin/ui`, create an API key, then send an agent to `/setup.md`.**
 
@@ -77,6 +80,147 @@ read http://127.0.0.1:9800/setup.md to register your agent to the broker
 ```
 
 After the human operator provides an API key, the agent registers itself, downloads its identity files, writes `AGENT.md` or `SOUL.md`, and starts checking its inbox.
+
+## One-command local agent team
+
+This is the shortest local workflow for running a four-agent team backed by a
+remote or local Agent Mailer broker.
+
+Install the CLI globally once:
+
+```bash
+uv tool install --force git+https://github.com/study8677/agent-mailer.git
+```
+
+Log in once:
+
+```bash
+amp login http://your-broker:9800 user
+```
+
+Then open any project directory and start the Codex team:
+
+```bash
+cd ~/work/your-project
+amp codex
+```
+
+Or start the Claude Code team:
+
+```bash
+amp claude-code
+```
+
+You do not need to create a team directory, clone another repo, or open four
+terminal windows manually. `amp codex` does the full bootstrap:
+
+- chooses a team name from the current folder, such as `your-project-codex`;
+- creates `~/amp-teams/<team-name>` automatically;
+- records the current folder as the real project directory and links it into each agent workdir as `project`;
+- registers or refreshes `planner`, `coder`, `reviewer`, and `runner` on the broker;
+- writes `team.yaml`, `agents/`, `start-team.sh`, and `stop-team.sh`;
+- starts one tmux session with four `agent-mailer watch` processes.
+
+Stop or restart the most recent team:
+
+```bash
+amp stop
+amp start
+```
+
+`amp stop` with no name first checks whether the current directory is already a
+generated team directory. Otherwise it stops the most recently created or
+started `amp` team.
+
+If you want a named team, pass the name after the runtime:
+
+```bash
+amp codex project-a
+amp claude-code project-a
+```
+
+Those create `project-a-codex` or `project-a-claude-code` under `~/amp-teams/`.
+You can still stop the latest team with `amp stop`; to target it explicitly:
+
+```bash
+amp stop project-a-codex
+```
+
+On first run, `amp` asks for the broker URL, username, and password. After that,
+it reuses the saved login from `~/.agent-mailer/credentials.json`. You can still
+pass everything explicitly with `--broker-url`, `--username`, and `--dir`.
+
+Requirements: `tmux` plus a logged-in local runtime CLI, either `codex` for
+`amp codex` or `claude` for `amp claude-code`.
+
+The short runtime commands default to full local permissions:
+`permission_mode = "bypassPermissions"`. This lets Codex or Claude Code read
+the original project directory and call the broker without approval prompts. To
+run a more restrictive team, pass `--permission-mode acceptEdits` or
+`--permission-mode plan`.
+
+The older explicit commands remain available for scripts:
+
+```bash
+amp up project-a --runtime codex
+amp init project-a
+amp start project-a
+amp stop project-a
+```
+
+The generated `agents/` directories contain API keys in `.agent-mailer/config.toml`, so `amp` also updates `.gitignore` for the local team artifacts.
+
+### Local team data and operations
+
+Real mail is stored in the Broker database, not in the local agent workdirs. The
+current production/NY server uses SQLite at
+`/root/agent-mailer-data/agent_mailer.db`, with mail rows in the `messages`
+table. Local agents keep only runtime state and memory; they do not persist full
+message bodies locally.
+
+Each local agent lives under:
+
+```text
+~/amp-teams/<team>/agents/<agent>
+```
+
+Common files in that directory:
+
+- `AGENT.md` — runtime identity and operating instructions.
+- `project` — symlink to the real project directory.
+- `.agent-mailer/config.toml` — broker URL, agent address, and API key.
+- `log.jsonl` — local watcher/runtime log.
+- `processed.txt` — processed message IDs.
+- `cursor.txt` — inbox polling cursor.
+- `inflight.json` — currently running message/thread state.
+- `sessions.json` — runtime session mapping, when present.
+- `dead_letter.jsonl` and `retries.json` — failed or retryable work, when present.
+- `memory/` — persistent memory files for the agent.
+
+Memory is split by scope. `memory/global.md` is long-term memory across threads.
+`memory/<thread_id>.md` stores handoff notes for one mail thread. Before each
+message is handled, the generated prompt asks the agent to read both global and
+thread memory; after handling, it asks the agent to update the thread memory.
+
+Use one unique team name per project. For example, use `opencmo-codex` for the
+`opencmo` project and `another-project-codex` for another project. The team
+directory, tmux session, and agent names are all separated by team name. Do not
+reuse the same team name for different projects, because that refreshes the same
+agents and API keys on the Broker.
+
+Codex and Claude Code teams are intentionally named separately:
+`<name>-codex` and `<name>-claude-code`.
+
+Common management commands:
+
+```bash
+ls ~/amp-teams
+tmux ls | grep '^amp-'
+amp start <team>
+amp stop <team>
+amp stop
+tmux attach -t amp-<team>
+```
 
 ## Highlights
 
@@ -126,9 +270,9 @@ Each agent receives a generated identity file such as `AGENT.md` or `SOUL.md`. A
 
 In addition to the broker, this repo ships **`agent-mailer`**, a per-workdir
 client runtime that turns an Agent Mailer Protocol agent into an unattended
-service. Instead of a human running `claude` and typing `/check-inbox`, the
-CLI polls the broker, decides whether to resume an existing claude session
-or start a fresh one, spawns headless Claude Code, and persists state under
+service. Instead of a human running an agent CLI and typing `/check-inbox`, the
+CLI polls the broker, decides whether to resume an existing runtime session
+or start a fresh one, spawns headless Claude Code or Codex, and persists state under
 `<workdir>/.agent-mailer/`.
 
 ### Install
@@ -156,6 +300,16 @@ missing, and forces an explicit choice of `permission_mode`
 (`acceptEdits` / `bypassPermissions` / `plan`). Subsequent runs read the
 config directly without prompting.
 
+Select Codex either during setup or in config:
+
+```bash
+agent-mailer init --runtime codex
+agent-mailer config set runtime codex
+```
+
+Claude uses `claude -p ...`; Codex uses `codex exec ...`. Make sure the
+matching CLI is installed and logged in before starting `agent-mailer watch`.
+
 ### Subcommand surface
 
 | Group | Commands |
@@ -170,7 +324,7 @@ config directly without prompting.
 `agent-mailer watch` enforces the SPEC's safety invariants: config files
 must be `0600` (directory `0700`), the agent_id in `AGENT.md` must match
 the one in `config.toml` (override with `--ignore-agent-md-mismatch`),
-and exactly one watcher process per workdir (file lock). When a claude
+and exactly one watcher process per workdir (file lock). When a runtime
 turn fails, the message goes through up to `max_retries` retries before
 landing in `.agent-mailer/dead_letter.jsonl`, which you can inspect or
 re-queue with `agent-mailer dead-letter`.
@@ -188,8 +342,7 @@ journalctl --user -u agent-mailer@coder.service -f
 ```
 
 For a per-workdir CLI specification (state files, prompt templates,
-session resume rules, fault-tolerance state machine), see
-`src/agent_mailer_cli/SPEC.md`.
+session resume rules, fault-tolerance state machine), see `SPEC.md`.
 
 ## Supported agent runtimes
 

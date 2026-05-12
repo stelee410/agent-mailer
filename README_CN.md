@@ -137,12 +137,147 @@ Agent 会自动完成：
 | Linkyun Infiniti Agent | `INFINITI.md` | `SOUL.md` |
 | 自研 Agent | 自定义加载器 | `AGENT.md` 或 `SOUL.md` |
 
+## 一条命令创建本地团队
+
+这是当前最短的本地团队流程：在任意项目目录里，用一个命令启动一组连接到
+Agent Mailer Broker 的四智能体团队。
+
+先全局安装一次 CLI：
+
+```bash
+uv tool install --force git+https://github.com/study8677/agent-mailer.git
+```
+
+先登录一次：
+
+```bash
+amp login http://your-broker:9800 user
+```
+
+然后进入任意项目目录，启动 Codex 团队：
+
+```bash
+cd ~/work/your-project
+amp codex
+```
+
+或者启动 Claude Code 团队：
+
+```bash
+amp claude-code
+```
+
+你不需要手动 `mkdir`、`git clone`，也不需要自己打开四个终端窗口。`amp codex`
+会一次性完成这些事：
+
+- 用当前目录名生成团队名，例如 `your-project-codex`；
+- 自动创建 `~/amp-teams/<team-name>`；
+- 记录当前目录作为真实项目目录，并在每个智能体目录里创建 `project` 软链接；
+- 在 Broker 上注册或刷新 `planner`、`coder`、`reviewer`、`runner`；
+- 写入 `team.yaml`、`agents/`、`start-team.sh`、`stop-team.sh`；
+- 启动一个 tmux session，里面跑四个 `agent-mailer watch` 进程。
+
+停止或重新启动最近一次团队：
+
+```bash
+amp stop
+amp start
+```
+
+不带名字的 `amp stop` 会先判断当前目录是不是生成出来的团队目录；如果不是，就停止
+最近一次由 `amp` 创建或启动的团队。
+
+如果想指定团队名，把名字放在运行时后面：
+
+```bash
+amp codex project-a
+amp claude-code project-a
+```
+
+这会在 `~/amp-teams/` 下创建 `project-a-codex` 或
+`project-a-claude-code`。通常继续用 `amp stop` 就能停止最近团队；如果要明确指定：
+
+```bash
+amp stop project-a-codex
+```
+
+首次运行 `amp` 会询问 Broker URL、用户名和密码；登录态会保存在
+`~/.agent-mailer/credentials.json`，后续复用。也可以继续用 `--broker-url`、
+`--username`、`--dir` 显式传参。
+
+运行前需要本机有 `tmux`，并且对应运行时 CLI 已经登录：`amp codex` 需要
+`codex`，`amp claude-code` 需要 `claude`。
+
+短命令默认使用本地全权限模式：`permission_mode = "bypassPermissions"`。这样 Codex
+或 Claude Code 可以读取真实项目目录，也可以直接访问 Broker，不会因为审批或 sandbox
+卡住。如果想降低权限，可以传 `--permission-mode acceptEdits` 或
+`--permission-mode plan`。
+
+旧的显式命令仍然保留，适合脚本里使用：
+
+```bash
+amp up project-a --runtime codex
+amp init project-a
+amp start project-a
+amp stop project-a
+```
+
+`agents/` 内含 API Key，所以 `amp` 会自动把本地团队产物加入 `.gitignore`。
+
+### 本地团队数据和运维
+
+真实邮件保存在 Broker 数据库里，不保存在本地智能体工作目录。当前生产/NY 服务器使用
+SQLite，路径是 `/root/agent-mailer-data/agent_mailer.db`，邮件表是
+`messages`。本地 agent 只保存运行状态和记忆，不保存邮件全文。
+
+每个本地智能体目录位于：
+
+```text
+~/amp-teams/<team>/agents/<agent>
+```
+
+常见文件和目录：
+
+- `AGENT.md`：运行时身份和操作说明。
+- `project`：指向真实项目目录的软链接。
+- `.agent-mailer/config.toml`：Broker URL、agent 地址和 API Key。
+- `log.jsonl`：本地 watcher/runtime 日志。
+- `processed.txt`：已处理消息 ID。
+- `cursor.txt`：inbox 轮询 cursor。
+- `inflight.json`：当前正在处理的消息/线程状态。
+- `sessions.json`：运行时 session 映射，如存在。
+- `dead_letter.jsonl` 和 `retries.json`：失败或待重试任务，如存在。
+- `memory/`：该智能体的持久记忆文件。
+
+记忆按作用域拆分。`memory/global.md` 是跨线程长期记忆；
+`memory/<thread_id>.md` 是单个邮件线程的 handoff notes。每次处理消息前，生成的
+prompt 会要求 agent 读取 global memory 和对应 thread memory；处理完成后，会要求
+agent 更新 thread memory。
+
+每个项目使用唯一 team name。例如 `opencmo` 项目使用 `opencmo-codex`，另一个项目使用
+`another-project-codex`。团队目录、tmux session、agent 名都会用 team name 区分。不要在
+不同项目复用同一个 team name，否则会刷新 Broker 上同一套 agent 和 API Key。
+
+Codex 和 Claude Code 团队名称刻意分离：`<name>-codex` 和
+`<name>-claude-code`。
+
+常用管理命令：
+
+```bash
+ls ~/amp-teams
+tmux ls | grep '^amp-'
+amp start <team>
+amp stop <team>
+amp stop
+tmux attach -t amp-<team>
+```
+
 ## 无人值守运行时：`agent-mailer` CLI
 
 除 Broker 外，本仓库还提供 **`agent-mailer`** 每 workdir 客户端运行时。它把
 Agent Mailer Protocol 中的某个 agent 升级为无人值守服务：定时轮询 broker
-inbox、按 thread 决定 resume 还是冷启 Claude session、spawn headless Claude
-Code，所有状态落在 `<workdir>/.agent-mailer/`。
+inbox、按 thread 决定 resume 还是冷启运行时 session、spawn headless Claude
+Code 或 Codex，所有状态落在 `<workdir>/.agent-mailer/`。
 
 ### 安装
 
@@ -166,6 +301,16 @@ agent-mailer watch
 缺 api_key 则询问，并**强制**用户从 `acceptEdits` / `bypassPermissions` / `plan`
 中显式选择 `permission_mode`（不接受静默默认）。后续运行直接读配置。
 
+选择 Codex 可以在初始化或配置里完成：
+
+```bash
+agent-mailer init --runtime codex
+agent-mailer config set runtime codex
+```
+
+Claude 会调用 `claude -p ...`；Codex 会调用 `codex exec ...`。启动
+`agent-mailer watch` 前，请确认对应 CLI 已安装并登录。
+
 ### 子命令面板
 
 | 组 | 命令 |
@@ -179,7 +324,7 @@ agent-mailer watch
 
 `agent-mailer watch` 启动时强制 SPEC 安全不变量：config 权限须为 `0600`、目录 `0700`；
 `AGENT.md` 与 `config.toml` 中 `agent_id` 必须一致（用 `--ignore-agent-md-mismatch`
-显式覆盖）；同 workdir 同时只能有一个 watcher（文件锁）。Claude 失败的消息会按
+显式覆盖）；同 workdir 同时只能有一个 watcher（文件锁）。运行时失败的消息会按
 `max_retries` 重试，重试用尽后写入 `.agent-mailer/dead_letter.jsonl`，可用
 `agent-mailer dead-letter` 子命令检视和重新入队。
 
@@ -195,7 +340,7 @@ journalctl --user -u agent-mailer@coder.service -f
 ```
 
 详细规格（状态文件、prompt 模板、session resume 规则、容错状态机）见
-`src/agent_mailer_cli/SPEC.md`。
+`SPEC.md`。
 
 ## API 概览
 
