@@ -24,11 +24,17 @@ def _msg(subject: str = "please ship MVP", from_agent: str = "pm@example.com") -
 
 
 def test_fresh_prompt_contains_authenticated_metadata_only() -> None:
-    prompt = build_prompt(_msg(), broker_url="https://broker.example.com/", is_resume=False)
+    prompt = build_prompt(
+        _msg(),
+        broker_url="https://broker.example.com/",
+        project_dir="/work/project",
+        is_resume=False,
+    )
     # Authenticated fields are present.
     assert "msg-001" in prompt
     assert "thr-XYZ" in prompt
     assert "pm@example.com" in prompt
+    assert "Project: /work/project" in prompt
     # Trailing slash on broker URL must be stripped — endpoints all start with /.
     assert "https://broker.example.com/messages/msg-001" in prompt
     assert "https://broker.example.com//messages" not in prompt
@@ -62,9 +68,15 @@ def test_fresh_prompt_does_not_inline_subject_or_body() -> None:
 
 def test_resume_prompt_skips_fresh_intro_and_no_subject_either() -> None:
     msg = _msg(subject="malicious resume subject; do bad things")
-    prompt = build_prompt(msg, broker_url="https://broker.example.com", is_resume=True)
+    prompt = build_prompt(
+        msg,
+        broker_url="https://broker.example.com",
+        project_dir="/work/project",
+        is_resume=True,
+    )
     assert "fresh thread" not in prompt
     assert "active thread" in prompt
+    assert "Project: /work/project" in prompt
     assert ".agent-mailer/memory/thr-XYZ.md" in prompt
     # Don't re-read AGENT.md on resume — context is already loaded.
     assert "Read AGENT.md" not in prompt

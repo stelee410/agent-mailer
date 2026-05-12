@@ -29,6 +29,8 @@ dev = [
 agent-mailer-server = "agent_mailer.cli:main"
 # Per-workdir agent runtime (SPEC §5.1).
 agent-mailer = "agent_mailer_cli.main:cli"
+# Short default-team launcher.
+amp = "agent_mailer_cli.amp:cli"
 
 [build-system]
 requires = ["hatchling"]

@@ -394,6 +394,35 @@ class TeamAddAgentRequest(BaseModel):
     agent_id: str
 
 
+class TeamBootstrapAgentSpec(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
+    address_local: str | None = None
+    role: str = ""
+    description: str = ""
+    system_prompt: str = ""
+    tags: list[str] = []
+
+
+class TeamBootstrapRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
+    description: str = ""
+    agents: list[TeamBootstrapAgentSpec] = Field(min_length=1)
+
+
+class TeamBootstrapAgentResult(BaseModel):
+    agent_id: str
+    name: str
+    address: str
+    role: str
+    api_key_plaintext: str
+    agent_md: str
+
+
+class TeamBootstrapResponse(BaseModel):
+    team: TeamResponse
+    agents: list[TeamBootstrapAgentResult]
+
+
 # --- Memory models ---
 
 

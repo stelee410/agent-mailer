@@ -45,9 +45,22 @@ def test_save_then_load_round_trip(tmp_path: Path) -> None:
     assert loaded.address == cfg.address
     assert loaded.api_key == cfg.api_key
     assert loaded.permission_mode == "acceptEdits"
+    assert loaded.runtime == "claude"
+    assert loaded.project_dir == ""
     # Defaults survive the round trip.
     assert loaded.poll_interval_idle == 60
     assert loaded.poll_interval_active == 10
+
+
+def test_save_then_load_project_dir(tmp_path: Path) -> None:
+    cfg = _bare_config(tmp_path)
+    cfg.project_dir = "/Users/example/work/project"
+
+    save_config(cfg)
+
+    loaded = load_config(tmp_path)
+    assert loaded is not None
+    assert loaded.project_dir == "/Users/example/work/project"
 
 
 def test_load_missing_returns_none(tmp_path: Path) -> None:
@@ -57,6 +70,14 @@ def test_load_missing_returns_none(tmp_path: Path) -> None:
 def test_load_rejects_invalid_permission_mode(tmp_path: Path) -> None:
     cfg = _bare_config(tmp_path)
     cfg.permission_mode = "garbage"
+    save_config(cfg)
+    with pytest.raises(ConfigError):
+        load_config(tmp_path)
+
+
+def test_load_rejects_invalid_runtime(tmp_path: Path) -> None:
+    cfg = _bare_config(tmp_path)
+    cfg.runtime = "not-a-runtime"
     save_config(cfg)
     with pytest.raises(ConfigError):
         load_config(tmp_path)
@@ -82,6 +103,8 @@ def test_update_field_validates_permission_mode(tmp_path: Path) -> None:
         update_field(tmp_path, "permission_mode", "garbage")
     update_field(tmp_path, "permission_mode", "plan")
     assert load_config(tmp_path).permission_mode == "plan"  # type: ignore[union-attr]
+    update_field(tmp_path, "runtime", "codex")
+    assert load_config(tmp_path).runtime == "codex"  # type: ignore[union-attr]
 
 
 def test_update_field_int_coercion(tmp_path: Path) -> None:

@@ -15,6 +15,7 @@ import click
 
 from agent_mailer_cli.config import (
     VALID_PERMISSION_MODES,
+    VALID_RUNTIMES,
     Config,
     ConfigError,
     mask_api_key,
@@ -24,12 +25,12 @@ from agent_mailer_cli.discovery import DiscoveryResult, discover
 from agent_mailer_cli.security import ensure_gitignore, fix_permissions
 
 PERMISSION_MENU = """\
-Permission mode for headless Claude:
+Permission mode for the headless runtime:
   [1] acceptEdits           Allow file edits, deny command execution.
                             (Recommended for most agents.)
-  [2] bypassPermissions     No safety checks. Claude can run any command.
+  [2] bypassPermissions     No safety checks. The runtime can run any command.
                             (Only for trusted automation.)
-  [3] plan                  Read-only mode. Claude can only plan, not act.
+  [3] plan                  Read-only mode. The runtime can only plan, not act.
                             (For review-only agents.)"""
 
 
@@ -57,22 +58,26 @@ def run_wizard(
             err=True,
         )
         click.echo("To set up an agent here:", err=True)
-        click.echo("  1. Run: claude", err=True)
+        click.echo("  1. Run your agent CLI (claude or codex)", err=True)
         click.echo(
-            "  2. In claude: read https://amp.linkyun.co/setup.md to register your agent",
+            "  2. Ask it to read https://amp.linkyun.co/setup.md and register your agent",
             err=True,
         )
-        click.echo("  3. Exit claude, then re-run: agent-mailer watch", err=True)
+        click.echo("  3. Exit the agent CLI, then re-run: agent-mailer watch", err=True)
         click.echo(
             "\nOr run `agent-mailer init` and pass --api-key/--agent-id/etc on the command line.",
             err=True,
         )
         raise WizardAborted()
 
+    if cfg.runtime not in VALID_RUNTIMES:
+        raise ConfigError(f"runtime must be one of {VALID_RUNTIMES}, got {cfg.runtime!r}")
+
     fully_configured = (
         result.config_existed
         and not cfg.missing_runtime_fields()
         and cfg.permission_mode in VALID_PERMISSION_MODES
+        and cfg.runtime in VALID_RUNTIMES
     )
     if fully_configured:
         # Happy path: nothing to ask. Avoid the v1 M3 P1-2 permission-mode
@@ -164,6 +169,7 @@ def _print_identity_summary(cfg: Config) -> None:
     click.echo(f"  Agent ID:     {cfg.agent_id or '(not set)'}")
     click.echo(f"  Address:      {cfg.address or '(not set)'}")
     click.echo(f"  Broker URL:   {cfg.broker_url or '(not set)'}")
+    click.echo(f"  Runtime:      {cfg.runtime or '(not set)'}")
     click.echo(f"  API key:      {mask_api_key(cfg.api_key) or '(not set)'}")
     click.echo("")
 
