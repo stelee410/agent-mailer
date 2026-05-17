@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Optional
 
 VALID_PERMISSION_MODES = ("acceptEdits", "bypassPermissions", "plan")
-VALID_RUNTIMES = ("claude", "codex")
+VALID_RUNTIMES = ("claude", "codex", "infiniti")
 
 # Required for runtime; permission_mode is checked separately because the
 # decision tree in §8.1 routes "missing permission_mode" to a single-question
@@ -40,6 +40,7 @@ class Config:
     runtime: str = "claude"
     claude_command: str = "claude"
     codex_command: str = "codex"
+    infiniti_command: str = "infiniti-agent"
     project_dir: str = ""
 
     # Convenience: not persisted, set by callers.
@@ -88,7 +89,8 @@ def load_config(workdir: Path) -> Optional[Config]:
     }
     str_fields = {
         "agent_id", "agent_name", "address", "broker_url", "api_key",
-        "permission_mode", "runtime", "claude_command", "codex_command", "project_dir",
+        "permission_mode", "runtime", "claude_command", "codex_command",
+        "infiniti_command", "project_dir",
     }
     for key, value in data.items():
         if key in str_fields:
@@ -219,6 +221,8 @@ def _render_toml(cfg: Config) -> str:
         lines.append(f'claude_command = "{_escape(cfg.claude_command)}"')
     if cfg.codex_command and cfg.codex_command != "codex":
         lines.append(f'codex_command = "{_escape(cfg.codex_command)}"')
+    if cfg.infiniti_command and cfg.infiniti_command != "infiniti-agent":
+        lines.append(f'infiniti_command = "{_escape(cfg.infiniti_command)}"')
     if cfg.project_dir:
         lines.extend([
             "",

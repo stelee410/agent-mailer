@@ -1,4 +1,20 @@
-# amp-team
+# amp-team — DEPRECATED
+
+> **Deprecated as of 2026-05-18.** Use `agent-mailer team init` from the
+> [agent_mailer_cli](../src/agent_mailer_cli) Python package instead. The
+> Python port supports the same flow plus:
+>
+> - **Watch-mode launchers**: generated `start-<role>.sh` runs
+>   `agent-mailer watch` so the runtime only spawns when a new email
+>   arrives (matches what real usage wanted).
+> - **All three runtimes**: `claude` / `codex` / `infiniti` are all
+>   selectable from the menu (this Node version only supported claude +
+>   infiniti and hard-failed codex selections).
+> - **Tighter integration**: each role dir is a normal
+>   `.agent-mailer/config.toml` workdir, so `agent-mailer doctor`, `logs`,
+>   `sessions`, etc. all work out of the box.
+>
+> Source is preserved here for reference but receives no further updates.
 
 One-shot CLI that registers a 4-role agent team (pm / dev / reviewer / support)
 on `amp.linkyun.co` and scaffolds local workdirs ready to launch.

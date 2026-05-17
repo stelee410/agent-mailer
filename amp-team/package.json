@@ -1,7 +1,8 @@
 {
   "name": "amp-team",
   "version": "0.1.0",
-  "description": "One-shot CLI to register a 4-role agent team (pm/dev/reviewer/support) on amp.linkyun.co and scaffold local workdirs.",
+  "deprecated": "Use 'agent-mailer team init' from the agent_mailer_cli Python package instead.",
+  "description": "DEPRECATED — superseded by `agent-mailer team init` in agent_mailer_cli. Original: one-shot CLI to register a 4-role agent team on amp.linkyun.co and scaffold local workdirs.",
   "bin": {
     "amp-team": "bin/amp-team.js"
   },

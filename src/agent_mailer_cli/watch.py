@@ -33,6 +33,13 @@ from agent_mailer_cli.codex_runner import (
     build_cmd as build_codex_cmd,
     run_codex,
 )
+from agent_mailer_cli.infiniti_runner import (
+    InfinitiNotFoundError,
+    InfinitiRunError,
+    InfinitiTimeoutError,
+    build_cmd as build_infiniti_cmd,
+    run_infiniti,
+)
 from agent_mailer_cli.memory import ensure_global_md
 from agent_mailer_cli.prompt import build_prompt, build_stale_session_note
 from agent_mailer_cli.recovery import (
@@ -227,19 +234,19 @@ async def _handle_message(msg: InboxMessage, cfg: Config, state: LocalState,
 
     try:
         result: ClaudeResult = await _run_runtime(cfg, cmd)
-    except (ClaudeNotFoundError, CodexNotFoundError) as exc:
+    except (ClaudeNotFoundError, CodexNotFoundError, InfinitiNotFoundError) as exc:
         click.echo(f"\n❌ {exc}", err=True)
         state.append_log("runtime_not_found", msg_id=msg.id, runtime=cfg.runtime, error=str(exc))
         state.clear_inflight()
         # Bail entirely — missing runtime CLI is a config issue, not a per-message one.
         raise WatchAborted(str(exc)) from exc
-    except (ClaudeTimeoutError, CodexTimeoutError) as exc:
+    except (ClaudeTimeoutError, CodexTimeoutError, InfinitiTimeoutError) as exc:
         click.echo(f"\n⚠️  {cfg.runtime} timed out for {msg.id}: {exc}")
         state.append_log("runtime_timeout", msg_id=msg.id, runtime=cfg.runtime, error=str(exc))
         _record_failure(msg, retries, dead_letter, state, max_retries,
                         last_error=f"timeout: {exc}")
         return
-    except (ClaudeRunError, CodexRunError) as exc:
+    except (ClaudeRunError, CodexRunError, InfinitiRunError) as exc:
         click.echo(f"\n⚠️  {cfg.runtime} run error for {msg.id}: {exc}")
         state.append_log("runtime_run_error", msg_id=msg.id, runtime=cfg.runtime, error=str(exc))
         _record_failure(msg, retries, dead_letter, state, max_retries,
@@ -301,6 +308,14 @@ def _build_runtime_cmd(cfg: Config, prompt: str, session_id: Optional[str]) -> l
             project_dir=cfg.project_dir or None,
             session_id=session_id,
         )
+    if cfg.runtime == "infiniti":
+        return build_infiniti_cmd(
+            infiniti_command=cfg.infiniti_command,
+            prompt=prompt,
+            permission_mode=cfg.permission_mode or "",
+            project_dir=cfg.project_dir or None,
+            session_id=session_id,
+        )
     return build_claude_cmd(
         claude_command=cfg.claude_command,
         prompt=prompt,
@@ -313,6 +328,8 @@ async def _run_runtime(cfg: Config, cmd: list[str]) -> ClaudeResult:
     cwd = cfg.workdir or Path.cwd()
     if cfg.runtime == "codex":
         return await run_codex(cmd, cwd=cwd)
+    if cfg.runtime == "infiniti":
+        return await run_infiniti(cmd, cwd=cwd)
     return await run_claude(cmd, cwd=cwd)
 
 

@@ -18,6 +18,7 @@ from agent_mailer_cli.commands import (
     config_cmd,
     doctor_cmd,
     init_cmd,
+    team_init_cmd,
     verify_cmd,
     watch_cmd,
 )
@@ -113,6 +114,54 @@ def init(workdir: Optional[Path], no_interactive: bool, api_key: Optional[str],
         agent_id=agent_id,
         address=address,
         agent_name=agent_name,
+    )
+    sys.exit(code)
+
+
+@cli.group("team", help="Provision and manage multi-agent teams.")
+def team_group() -> None:
+    pass
+
+
+@team_group.command(
+    "init",
+    help="Register a 4-role agent team (pm/dev/reviewer/support) on the broker and scaffold per-role watch workdirs.",
+)
+@click.option(
+    "--workdir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Team workdir (default: current directory; must be empty).",
+)
+@click.option("--broker-url", default=None, help="Broker URL (default amp.linkyun.co).")
+@click.option("--username", default=None, help="Login username (skips the username prompt).")
+@click.option(
+    "--permission-mode",
+    type=click.Choice(["acceptEdits", "bypassPermissions", "plan"]),
+    default="acceptEdits",
+    show_default=True,
+    help="permission_mode written into every role's config.toml.",
+)
+@click.option(
+    "--project-dir",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="project_dir to record in each role config (the source repo this team works on).",
+)
+def team_init(
+    workdir: Optional[Path],
+    broker_url: Optional[str],
+    username: Optional[str],
+    permission_mode: str,
+    project_dir: Optional[Path],
+) -> None:
+    target = (workdir or Path.cwd()).resolve()
+    code = team_init_cmd.run(
+        target,
+        broker_url=broker_url,
+        username=username,
+        permission_mode=permission_mode,
+        project_dir=str(project_dir.resolve()) if project_dir else None,
     )
     sys.exit(code)
 
