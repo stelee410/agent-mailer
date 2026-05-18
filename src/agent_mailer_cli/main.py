@@ -144,8 +144,11 @@ def team_group() -> None:
         "permission_mode written into every role's config.toml. "
         "Default `bypassPermissions` lets the headless watch claude run "
         "fully auto (claude_runner translates this to "
-        "--dangerously-skip-permissions). Pick acceptEdits/plan for "
-        "stricter, gated runs (.claude/settings.json allowlist still applies)."
+        "--dangerously-skip-permissions; the .claude/settings.json "
+        "allowlist is bypassed entirely in this mode — the skip flag "
+        "overrides per-tool allowlists). Pick acceptEdits/plan for "
+        "stricter, gated runs: the allowlist becomes load-bearing only "
+        "after you downgrade to one of those modes."
     ),
 )
 @click.option(

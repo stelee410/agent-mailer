@@ -1,6 +1,7 @@
 """Tests for `agent-mailer team init` — deterministic helpers + stubbed-broker e2e."""
 from __future__ import annotations
 
+import inspect
 import json
 import os
 import stat
@@ -10,6 +11,7 @@ import httpx
 import pytest
 
 from agent_mailer_cli import team_setup
+from agent_mailer_cli.commands import team_init_cmd
 from agent_mailer_cli.commands.team_init_cmd import provision_team
 from agent_mailer_cli.config import VALID_RUNTIMES, load_config
 
@@ -393,3 +395,52 @@ def test_infiniti_runner_ignores_permission_mode_and_session() -> None:
         session_id="should-be-ignored",
     )
     assert cmd == ["infiniti-agent", "cli", "x"]
+
+
+# ---------- defaults / regression ----------
+
+
+def test_run_aborts_when_user_declines_unsandboxed_confirm(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reviewer P0-1 (option B): in default bypassPermissions mode, the wizard
+    surfaces an explicit unsandboxed-auto-execution confirm. Declining must
+    abort with exit 1 and never reach the broker."""
+    monkeypatch.setattr(team_init_cmd, "_prompt_team_slug", lambda _wd: "smoke")
+    monkeypatch.setattr(
+        team_init_cmd, "_prompt_frameworks",
+        lambda: {r: "claude" for r in team_setup.ROLES},
+    )
+    monkeypatch.setattr(
+        team_init_cmd, "_prompt_login",
+        lambda _u: {"username": "u", "password": "p"},
+    )
+    # Simulate user picking "no" at the unsandboxed confirm.
+    monkeypatch.setattr(
+        team_init_cmd, "_confirm_unsandboxed_auto", lambda _f: False,
+    )
+    # Provision must not be called — fail loudly if the abort gate is bypassed.
+    def _boom(*_a, **_kw):
+        raise AssertionError("provision_team must not be reached after decline")
+    monkeypatch.setattr(team_init_cmd, "provision_team", _boom)
+
+    code = team_init_cmd.run(tmp_path)
+    assert code == 1
+
+
+def test_team_init_defaults_to_bypass_permissions() -> None:
+    """Reviewer P1-3: team init default permission_mode is the human-override
+    contract (`bypassPermissions`). Lock both entry points so a future
+    refactor can't silently downgrade to `acceptEdits` and break the watch
+    auto-run goal."""
+    run_default = inspect.signature(team_init_cmd.run).parameters["permission_mode"].default
+    provision_default = inspect.signature(
+        team_init_cmd.provision_team
+    ).parameters["permission_mode"].default
+    assert run_default == "bypassPermissions", (
+        f"team_init_cmd.run permission_mode default drifted to {run_default!r}"
+    )
+    assert provision_default == "bypassPermissions", (
+        f"team_init_cmd.provision_team permission_mode default drifted to "
+        f"{provision_default!r}"
+    )

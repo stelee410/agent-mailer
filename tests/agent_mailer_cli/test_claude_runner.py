@@ -59,6 +59,10 @@ def test_build_cmd_bypass_with_session_id_appends_resume() -> None:
     )
     assert "--dangerously-skip-permissions" in cmd
     assert cmd[-2:] == ["--resume", "sess-123"]
+    # Reviewer P1-2: explicit reverse-assert so `--resume` ordering can't
+    # ever drift into re-emitting `--permission-mode` alongside the skip
+    # flag (claude rejects conflicting permission flags).
+    assert "--permission-mode" not in cmd
 
 
 def test_build_cmd_preserves_prompt_and_json_output() -> None:

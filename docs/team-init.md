@@ -213,3 +213,49 @@ and was retired in favour of this Python subcommand. Differences:
 No data migration is needed if you don't have an existing team scaffolded.
 For an existing amp-team workdir, the simplest path is to delete the old
 files and re-run `agent-mailer team init` in a fresh directory.
+
+## v0.2.x release notes — `permission_mode = bypassPermissions` semantic upgrade
+
+If you have an existing `config.toml` with
+`permission_mode = "bypassPermissions"` (set in v0.1.x or earlier), the
+semantics have changed under your feet. **Read this carefully** — this
+applies to every `agent-mailer watch` workdir, not just team-init scaffolds.
+
+- **claude_runner** (commit `73ad3e3`):
+  - **Before**: `--permission-mode bypassPermissions` was passed verbatim.
+    Headless `-p` mode still gated on Bash/network per tool — root cause of
+    the v0.2.0 watch dead-lock where every `curl https://amp.linkyun.co/...`
+    hung on "This command requires approval".
+  - **After**: passes `--dangerously-skip-permissions` instead. All
+    approval gates fully off.
+- **codex_runner** (no source change, but the semantic flow is now
+  reachable from `team init` defaults):
+  - `bypassPermissions` continues to map to
+    `--dangerously-bypass-approvals-and-sandbox`. **Sandbox is fully OFF**:
+    spawned codex processes can read any file, run any shell command, and
+    reach any network.
+- **infiniti_runner**: unaffected — the `infiniti-agent cli` surface has no
+  approval gate to flip in the first place.
+
+`agent-mailer team init` now defaults `permission_mode` to
+`bypassPermissions`, but the wizard surfaces an explicit confirm prompt
+listing every affected runtime before provisioning starts. Existing
+`watch` workdirs do **not** get a prompt — the runtime change takes effect
+on the next spawn.
+
+### How to opt out
+
+If you want the old gated semantics for an existing workdir, edit its
+`config.toml`:
+
+```toml
+# Strictest (read-only):
+permission_mode = "plan"
+
+# Or middle ground (file edits without prompts; no shell):
+permission_mode = "acceptEdits"
+```
+
+`.claude/settings.json` (the broker allowlist shipped with v0.2.x) becomes
+load-bearing again under those modes — it stays in place as
+defence-in-depth.

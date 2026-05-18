@@ -74,6 +74,14 @@ def run(
     frameworks = _prompt_frameworks()
     creds = _prompt_login(username)
 
+    if permission_mode == "bypassPermissions" and not _confirm_unsandboxed_auto(frameworks):
+        click.echo(
+            "Aborted — re-run with --permission-mode acceptEdits or plan "
+            "if you want gated execution.",
+            err=True,
+        )
+        return 1
+
     try:
         with httpx.Client(timeout=60.0) as client:
             return provision_team(
@@ -248,6 +256,43 @@ def provision_team(
 
 
 # ---------- interactive prompts ----------
+
+
+def _confirm_unsandboxed_auto(frameworks: dict[str, str]) -> bool:
+    """v0.2.x P0-1 (option B): explicit confirm before fully unsandboxed auto-execution.
+
+    Default permission_mode `bypassPermissions` now disables BOTH approval
+    gates and (for codex) the sandbox. Reviewer flagged that the codex side
+    was not previously surfaced to the user — confirm step makes the full
+    blast radius explicit, covering claude AND codex.
+    """
+    runtimes = set(frameworks.values())
+    lines = ["\n⚠️  About to enable fully unsandboxed auto-execution:"]
+    if "claude" in runtimes:
+        lines.append(
+            "  - claude roles: --dangerously-skip-permissions "
+            "(all approval gates off)"
+        )
+    if "codex" in runtimes:
+        lines.append(
+            "  - codex roles: --dangerously-bypass-approvals-and-sandbox "
+            "(sandbox OFF, raw shell)"
+        )
+    if "infiniti" in runtimes:
+        lines.append(
+            "  - infiniti roles: runtime has no approval gate by design"
+        )
+    lines += [
+        "This lets `agent-mailer watch` handle every incoming email without",
+        "prompts, but spawned processes can run any shell command, read any",
+        "file, and reach any network. Recommended only for trusted workdirs.",
+        "",
+    ]
+    click.echo(click.style("\n".join(lines), fg="yellow"))
+    return click.confirm(
+        "Enable fully unsandboxed auto-execution?",
+        default=True,
+    )
 
 
 def _prompt_team_slug(workdir: Path) -> str:
