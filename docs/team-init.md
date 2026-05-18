@@ -85,17 +85,41 @@ output. `team init` ships a surgical allowlist:
   "permissions": {
     "allow": [
       "Bash(curl:*amp.linkyun.co*)",
-      "Bash(agent-mailer:*)"
+      "Bash(agent-mailer:*)",
+      "WebFetch(domain:amp.linkyun.co)"
     ]
   }
 }
 ```
+
+The three entries cover the two distinct paths claude can take to reach the
+broker: `Bash(curl:…)` for shell-driven `curl https://amp.linkyun.co/...`,
+`Bash(agent-mailer:*)` for the wrapped CLI, and `WebFetch(domain:…)` for
+claude's built-in `WebFetch` tool — the prompt templates use neutral verbs
+(GET / POST / PATCH) and don't pin claude to curl, so either tool may be
+picked at runtime.
 
 This is intentionally narrow — `bypassPermissions` would solve the same
 problem with much wider blast radius (any Bash). Codex and Infiniti roles
 don't get this file: `codex_runner` already passes
 `--ask-for-approval never`, and the `infiniti-agent cli` surface has no
 approval gate at all.
+
+### Migrating an existing workdir
+
+If you scaffolded a team before this allowlist shipped, drop the file in
+under each role directory:
+
+```bash
+for role in pm dev reviewer support; do
+  mkdir -p "$role/.claude" && cat > "$role/.claude/settings.json" <<'EOF'
+{"permissions":{"allow":["Bash(curl:*amp.linkyun.co*)","Bash(agent-mailer:*)","WebFetch(domain:amp.linkyun.co)"]}}
+EOF
+done
+```
+
+Re-run `agent-mailer team init` in a fresh directory if you'd rather start
+clean.
 
 ## Failure handling
 

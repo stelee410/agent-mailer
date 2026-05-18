@@ -217,6 +217,9 @@ def test_provision_team_writes_full_layout(tmp_path: Path) -> None:
             assert any("agent-mailer" in pat for pat in allow), (
                 f"agent-mailer allowlist missing in {claude_settings}: {allow!r}"
             )
+            assert any(pat.startswith("WebFetch(") for pat in allow), (
+                f"WebFetch allowlist missing in {claude_settings}: {allow!r}"
+            )
             if os.name != "nt":
                 mode = stat.S_IMODE(claude_settings.stat().st_mode)
                 assert mode == 0o644, (
@@ -341,6 +344,12 @@ def test_write_runtime_settings_claude_writes_broker_allowlist(tmp_path: Path) -
     )
     assert any("agent-mailer" in pat for pat in allow), (
         f"agent-mailer CLI must be in the allowlist; got {allow!r}"
+    )
+    # reviewer-driven gap fix: claude may pick WebFetch tool (not Bash curl) for
+    # broker GET/POST/PATCH — WebFetch needs its own allow pattern, otherwise
+    # we reproduce the same `This command requires approval` hang.
+    assert "WebFetch(domain:amp.linkyun.co)" in allow, (
+        f"WebFetch(domain:amp.linkyun.co) must be in the allowlist; got {allow!r}"
     )
     if os.name != "nt":
         mode = stat.S_IMODE(settings_path.stat().st_mode)

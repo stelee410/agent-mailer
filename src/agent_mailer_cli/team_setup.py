@@ -284,6 +284,7 @@ def finalize_role(workdir: Path, role: str) -> None:
 _CLAUDE_BROKER_ALLOWLIST = [
     "Bash(curl:*amp.linkyun.co*)",
     "Bash(agent-mailer:*)",
+    "WebFetch(domain:amp.linkyun.co)",
 ]
 
 
