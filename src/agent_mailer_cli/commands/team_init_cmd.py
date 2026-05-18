@@ -47,7 +47,7 @@ def run(
     *,
     broker_url: Optional[str] = None,
     username: Optional[str] = None,
-    permission_mode: str = "acceptEdits",
+    permission_mode: str = "bypassPermissions",
     project_dir: Optional[str] = None,
 ) -> int:
     """Entry point used by main.py. Returns process exit code."""
@@ -101,7 +101,7 @@ def provision_team(
     frameworks: dict[str, str],
     username: str,
     password: str,
-    permission_mode: str = "acceptEdits",
+    permission_mode: str = "bypassPermissions",
     project_dir: Optional[str] = None,
 ) -> int:
     """Network-touching half of team init. Pulled out for tests (MockTransport)."""

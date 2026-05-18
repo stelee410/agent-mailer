@@ -32,14 +32,20 @@ The interactive wizard asks for:
 runtime-specific flags. The same label has different reach depending on
 runtime — pick deliberately:
 
-| `permission_mode`        | claude                          | codex                                                          | infiniti                                  |
-|--------------------------|---------------------------------|----------------------------------------------------------------|-------------------------------------------|
-| `acceptEdits` (default)  | file edits without prompts; no shell | `--sandbox workspace-write` — file edits **and** sandboxed shell | runtime ignores; uses its own internal defaults |
-| `bypassPermissions`      | all tools without prompts; full shell | `--dangerously-bypass-approvals-and-sandbox` (raw shell, no sandbox) | runtime ignores                            |
-| `plan`                   | plan-only (read-only) mode      | `--sandbox read-only --ask-for-approval never`                 | runtime ignores                            |
+| `permission_mode`             | claude                                                          | codex                                                          | infiniti                                  |
+|-------------------------------|-----------------------------------------------------------------|----------------------------------------------------------------|-------------------------------------------|
+| `bypassPermissions` (default) | `--dangerously-skip-permissions` (no approval gate, fully auto) | `--dangerously-bypass-approvals-and-sandbox` (raw shell, no sandbox) | runtime ignores                            |
+| `acceptEdits`                 | `--permission-mode acceptEdits` — file edits without prompts; no shell | `--sandbox workspace-write` — file edits **and** sandboxed shell | runtime ignores; uses its own internal defaults |
+| `plan`                        | `--permission-mode plan` (plan-only, read-only)                 | `--sandbox read-only --ask-for-approval never`                 | runtime ignores                            |
 
-Two non-obvious points:
+Three non-obvious points:
 
+- **`bypassPermissions` for claude maps to `--dangerously-skip-permissions`**,
+  not `--permission-mode bypassPermissions`. They mean the same thing in
+  claude-code's docs, but only the `--dangerously-skip-permissions` form
+  actually disables per-tool approval prompts under headless `-p` mode.
+  This is why it's the default for `team init` — auto-watch needs zero
+  approval gates.
 - **Codex's `acceptEdits` includes sandboxed shell**, while claude's
   `acceptEdits` does **not**. If you want strict no-shell behaviour across
   both, choose `plan`.
@@ -74,11 +80,18 @@ Each role workdir is a full `agent-mailer watch` workdir — `doctor`,
 
 ### Why `.claude/settings.json` (claude runtime only)
 
-Claude Code's `acceptEdits` permission mode auto-approves file edits but
-**not Bash / network**. In a headless `-p` invocation there is no human to
-type "y", so every `curl https://amp.linkyun.co/...` hangs on "This command
-requires approval" and the watcher burns the full timeout for ~zero
-output. `team init` ships a surgical allowlist:
+The default `bypassPermissions` mode already disables every per-tool
+approval prompt via `--dangerously-skip-permissions`, so for the default
+config the allowlist is **defence-in-depth** rather than load-bearing.
+
+It becomes load-bearing the moment a user picks a stricter
+`permission_mode`: claude's `acceptEdits` auto-approves file edits but
+**not Bash / network**, and `plan` is read-only. In a headless `-p`
+invocation there is no human to type "y", so without the allowlist every
+`curl https://amp.linkyun.co/...` hangs on "This command requires
+approval" and the watcher burns the full timeout for ~zero output.
+`team init` ships a surgical allowlist so the downgrade path stays
+functional:
 
 ```json
 {

@@ -138,9 +138,15 @@ def team_group() -> None:
 @click.option(
     "--permission-mode",
     type=click.Choice(["acceptEdits", "bypassPermissions", "plan"]),
-    default="acceptEdits",
+    default="bypassPermissions",
     show_default=True,
-    help="permission_mode written into every role's config.toml.",
+    help=(
+        "permission_mode written into every role's config.toml. "
+        "Default `bypassPermissions` lets the headless watch claude run "
+        "fully auto (claude_runner translates this to "
+        "--dangerously-skip-permissions). Pick acceptEdits/plan for "
+        "stricter, gated runs (.claude/settings.json allowlist still applies)."
+    ),
 )
 @click.option(
     "--project-dir",

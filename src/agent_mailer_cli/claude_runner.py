@@ -49,8 +49,17 @@ def build_cmd(
         claude_command,
         "-p", prompt,
         "--output-format", "json",
-        "--permission-mode", permission_mode,
     ]
+    # v0.2.x human override: bypassPermissions in claude code semantics IS
+    # `--dangerously-skip-permissions`. Headless `-p` mode otherwise still
+    # gates on Bash/network even with `--permission-mode bypassPermissions`
+    # (gate accepts the flag but per-tool approval prompts remain), so
+    # team init's auto-watch goal needs the explicit skip flag.
+    # Other modes (acceptEdits / plan) keep --permission-mode unchanged.
+    if permission_mode == "bypassPermissions":
+        cmd.append("--dangerously-skip-permissions")
+    else:
+        cmd += ["--permission-mode", permission_mode]
     if session_id:
         cmd += ["--resume", session_id]
     return cmd
